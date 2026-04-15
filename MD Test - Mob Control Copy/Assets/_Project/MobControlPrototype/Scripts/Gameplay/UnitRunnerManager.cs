@@ -1,0 +1,292 @@
+using System;
+using System.Collections.Generic;
+using MobControlPrototype.Crowd;
+using MobControlPrototype.Infrastructure;
+using UnityEngine;
+
+namespace MobControlPrototype.Gameplay
+{
+    [DisallowMultipleComponent]
+    public sealed class UnitRunnerManager : MonoBehaviour
+    {
+        [Header("Units")]
+        [SerializeField, Min(1)] private int maxActiveUnits = 160;
+        [SerializeField, Min(0.1f)] private float runnerColliderRadius = 0.28f;
+        [SerializeField, Min(0.1f)] private float runnerColliderHeight = 1.25f;
+
+        [Header("Movement")]
+        [SerializeField, Min(0f)] private float fallbackMoveSpeed = 5.4f;
+        [SerializeField, Min(1f)] private float despawnZ = 72f;
+
+        [Header("Gate Spawn")]
+        [SerializeField, Min(0.05f)] private float cloneSpacing = 0.42f;
+        [SerializeField, Min(0f)] private float cloneForwardOffset = 0.85f;
+
+        private readonly List<UnitRunner> _activeRunners = new List<UnitRunner>(160);
+        private readonly Stack<GameObject> _pool = new Stack<GameObject>(160);
+        private IUnitFactory _unitFactory;
+        private IMovementStrategy _movementStrategy;
+        private Transform _poolRoot;
+        private int _nextRunnerId;
+        private bool _levelEnded;
+
+        public event Action<int> CountChanged;
+        public event Action<bool> LevelEnded;
+
+        public int ActiveCount => _activeRunners.Count;
+        public int MaxActiveUnits => maxActiveUnits;
+        public bool IsLevelEnded => _levelEnded;
+
+        public void Initialize(IUnitFactory unitFactory, IMovementStrategy movementStrategy)
+        {
+            _unitFactory = unitFactory;
+            _movementStrategy = movementStrategy;
+        }
+
+        private void Awake()
+        {
+            EnsurePoolRoot();
+        }
+
+        private void Start()
+        {
+            if (_unitFactory == null && ServiceLocator.TryGet(out IUnitFactory unitFactory))
+            {
+                _unitFactory = unitFactory;
+            }
+
+            if (_movementStrategy == null && ServiceLocator.TryGet(out IMovementStrategy movementStrategy))
+            {
+                _movementStrategy = movementStrategy;
+            }
+
+            CountChanged?.Invoke(ActiveCount);
+        }
+
+        private void FixedUpdate()
+        {
+            if (_levelEnded || ActiveCount == 0)
+            {
+                return;
+            }
+
+            Vector3 delta = _movementStrategy != null
+                ? _movementStrategy.GetDelta(Time.fixedDeltaTime)
+                : Vector3.forward * (fallbackMoveSpeed * Time.fixedDeltaTime);
+
+            for (int i = ActiveCount - 1; i >= 0; i--)
+            {
+                UnitRunner runner = _activeRunners[i];
+                Rigidbody body = runner.Body;
+                Vector3 nextPosition = body != null ? body.position + delta : runner.transform.position + delta;
+                if (body != null)
+                {
+                    body.MovePosition(nextPosition);
+                }
+                else
+                {
+                    runner.transform.position = nextPosition;
+                }
+
+                if (nextPosition.z >= despawnZ)
+                {
+                    Despawn(runner);
+                }
+            }
+        }
+
+        public UnitRunner FireUnit(Vector3 worldPosition, Quaternion worldRotation)
+        {
+            if (_levelEnded || _unitFactory == null || ActiveCount >= maxActiveUnits)
+            {
+                return null;
+            }
+
+            return SpawnRunner(worldPosition, worldRotation);
+        }
+
+        public int ApplyGate(UnitRunner source, GateOperation operation, int value, float spawnZ)
+        {
+            if (source == null || !source.IsActive || _levelEnded)
+            {
+                return 0;
+            }
+
+            switch (operation)
+            {
+                case GateOperation.Add:
+                    return SpawnCopies(source, value, spawnZ);
+                case GateOperation.Multiply:
+                    return SpawnCopies(source, Mathf.Max(0, value - 1), spawnZ);
+                case GateOperation.Subtract:
+                    return -RemoveUnits(value, source);
+                default:
+                    return 0;
+            }
+        }
+
+        public void RemoveRunner(UnitRunner runner)
+        {
+            if (runner == null || !runner.IsActive)
+            {
+                return;
+            }
+
+            Despawn(runner);
+        }
+
+        public void CompleteLevel(bool success)
+        {
+            if (_levelEnded)
+            {
+                return;
+            }
+
+            _levelEnded = true;
+            Debug.Log(success ? "Castle destroyed." : "Level ended.");
+            LevelEnded?.Invoke(success);
+        }
+
+        private UnitRunner SpawnRunner(Vector3 worldPosition, Quaternion worldRotation)
+        {
+            GameObject instance = GetFromPool();
+            instance.transform.SetParent(transform, true);
+            instance.transform.SetPositionAndRotation(worldPosition, worldRotation);
+            instance.name = $"Runner_{++_nextRunnerId:000}";
+            instance.SetActive(true);
+
+            UnitRunner runner = EnsureRunnerComponents(instance);
+            runner.Initialize(this);
+            runner.ActiveIndex = _activeRunners.Count;
+            _activeRunners.Add(runner);
+            CountChanged?.Invoke(ActiveCount);
+            return runner;
+        }
+
+        private GameObject GetFromPool()
+        {
+            if (_pool.Count > 0)
+            {
+                return _pool.Pop();
+            }
+
+            return _unitFactory.CreateUnit(transform, Vector3.zero, Quaternion.identity);
+        }
+
+        private void Despawn(UnitRunner runner)
+        {
+            int index = runner.ActiveIndex;
+            int lastIndex = _activeRunners.Count - 1;
+            UnitRunner last = _activeRunners[lastIndex];
+            _activeRunners[index] = last;
+            last.ActiveIndex = index;
+            _activeRunners.RemoveAt(lastIndex);
+
+            runner.Deactivate();
+            GameObject runnerObject = runner.gameObject;
+            runnerObject.SetActive(false);
+            runnerObject.transform.SetParent(_poolRoot, false);
+            runnerObject.transform.localPosition = Vector3.zero;
+            _pool.Push(runnerObject);
+
+            CountChanged?.Invoke(ActiveCount);
+        }
+
+        private UnitRunner EnsureRunnerComponents(GameObject runnerObject)
+        {
+            CapsuleCollider collider = runnerObject.GetComponent<CapsuleCollider>();
+            if (collider == null)
+            {
+                collider = runnerObject.AddComponent<CapsuleCollider>();
+            }
+
+            collider.isTrigger = true;
+            collider.radius = runnerColliderRadius;
+            collider.height = runnerColliderHeight;
+            collider.center = new Vector3(0f, runnerColliderHeight * 0.5f, 0f);
+
+            Rigidbody body = runnerObject.GetComponent<Rigidbody>();
+            if (body == null)
+            {
+                body = runnerObject.AddComponent<Rigidbody>();
+            }
+
+            body.isKinematic = true;
+            body.useGravity = false;
+
+            UnitRunner runner = runnerObject.GetComponent<UnitRunner>();
+            if (runner == null)
+            {
+                runner = runnerObject.AddComponent<UnitRunner>();
+            }
+
+            return runner;
+        }
+
+        private void EnsurePoolRoot()
+        {
+            if (_poolRoot != null)
+            {
+                return;
+            }
+
+            GameObject poolObject = new GameObject("InactiveRunnerPool");
+            poolObject.transform.SetParent(transform, false);
+            poolObject.SetActive(false);
+            _poolRoot = poolObject.transform;
+        }
+
+        private static float GetCenteredOffset(int index, int total)
+        {
+            return index - (total - 1) * 0.5f;
+        }
+
+        private int SpawnCopies(UnitRunner source, int count, float spawnZ)
+        {
+            int extraCount = Mathf.Min(Mathf.Max(0, count), maxActiveUnits - ActiveCount);
+            if (extraCount <= 0)
+            {
+                return 0;
+            }
+
+            Vector3 basePosition = source.transform.position;
+            basePosition.z = Mathf.Max(spawnZ, source.transform.position.z + cloneForwardOffset);
+            Quaternion rotation = source.transform.rotation;
+            int spawned = 0;
+
+            for (int i = 0; i < extraCount; i++)
+            {
+                float xOffset = GetCenteredOffset(i + 1, extraCount + 1) * cloneSpacing;
+                Vector3 position = basePosition + Vector3.right * xOffset;
+                if (SpawnRunner(position, rotation) != null)
+                {
+                    spawned++;
+                }
+            }
+
+            return spawned;
+        }
+
+        private int RemoveUnits(int count, UnitRunner source)
+        {
+            int remaining = Mathf.Max(0, count);
+            int removed = 0;
+
+            if (remaining > 0 && source != null && source.IsActive)
+            {
+                RemoveRunner(source);
+                removed++;
+                remaining--;
+            }
+
+            while (remaining > 0 && ActiveCount > 0)
+            {
+                RemoveRunner(_activeRunners[ActiveCount - 1]);
+                removed++;
+                remaining--;
+            }
+
+            return removed;
+        }
+    }
+}

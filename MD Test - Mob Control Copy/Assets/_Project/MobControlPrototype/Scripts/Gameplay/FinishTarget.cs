@@ -1,0 +1,84 @@
+using System;
+using UnityEngine;
+
+namespace MobControlPrototype.Gameplay
+{
+    [RequireComponent(typeof(Collider))]
+    [DisallowMultipleComponent]
+    public sealed class FinishTarget : MonoBehaviour
+    {
+        [SerializeField, Min(1)] private int health = 20;
+        [SerializeField, Min(1)] private int damagePerUnit = 1;
+        [SerializeField] private Renderer[] feedbackRenderers;
+        [SerializeField] private Color successColor = new Color(0.16f, 0.76f, 0.31f, 1f);
+
+        private int _currentHealth;
+        private bool _destroyed;
+
+        public event Action<int, int> HealthChanged;
+
+        public int CurrentHealth => _currentHealth;
+        public int MaxHealth => health;
+
+        private void Awake()
+        {
+            _currentHealth = Mathf.Max(1, health);
+            Collider trigger = GetComponent<Collider>();
+            trigger.isTrigger = true;
+            NotifyHealthChanged();
+        }
+
+        private void OnValidate()
+        {
+            health = Mathf.Max(1, health);
+            damagePerUnit = Mathf.Max(1, damagePerUnit);
+            if (!Application.isPlaying)
+            {
+                _currentHealth = health;
+            }
+        }
+
+        public bool TryDamage(UnitRunner runner)
+        {
+            if (_destroyed || runner == null || !runner.IsActive)
+            {
+                return false;
+            }
+
+            _currentHealth = Mathf.Max(0, _currentHealth - damagePerUnit);
+            runner.Manager.RemoveRunner(runner);
+            NotifyHealthChanged();
+
+            if (_currentHealth <= 0)
+            {
+                _destroyed = true;
+                runner.Manager.CompleteLevel(true);
+                ApplyResultFeedback(true);
+            }
+
+            return true;
+        }
+
+        private void ApplyResultFeedback(bool success)
+        {
+            Color color = successColor;
+            if (feedbackRenderers == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < feedbackRenderers.Length; i++)
+            {
+                if (feedbackRenderers[i] != null)
+                {
+                    feedbackRenderers[i].material.color = color;
+                }
+            }
+        }
+
+        private void NotifyHealthChanged()
+        {
+            HealthChanged?.Invoke(_currentHealth, health);
+        }
+    }
+}
