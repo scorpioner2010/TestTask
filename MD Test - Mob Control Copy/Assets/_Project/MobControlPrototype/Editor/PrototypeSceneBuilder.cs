@@ -690,6 +690,7 @@ namespace MobControlPrototype.Editor
             SerializedObject serializedShooter = new SerializedObject(shooter);
             serializedShooter.FindProperty("muzzle").objectReferenceValue = muzzle.transform;
             serializedShooter.FindProperty("runnerManager").objectReferenceValue = runnerManager;
+            serializedShooter.FindProperty("recoilRoot").objectReferenceValue = cannon.transform;
             serializedShooter.FindProperty("horizontalSpeed").floatValue = 5f;
             serializedShooter.FindProperty("minX").floatValue = -2.7f;
             serializedShooter.FindProperty("maxX").floatValue = 2.7f;

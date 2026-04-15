@@ -22,6 +22,11 @@ namespace MobControlPrototype.Gameplay
         [SerializeField, Min(0.05f)] private float cloneSpacing = 0.42f;
         [SerializeField, Min(0f)] private float cloneForwardOffset = 0.85f;
 
+        [Header("Gate Spawn Animation")]
+        [SerializeField, Min(0.05f)] private float cloneSpreadDuration = 0.24f;
+        [SerializeField, Min(0f)] private float cloneSpreadArcHeight = 0.34f;
+        [SerializeField, Range(0.1f, 1f)] private float cloneStartScaleMultiplier = 0.78f;
+
         private readonly List<UnitRunner> _activeRunners = new List<UnitRunner>(160);
         private readonly Stack<GameObject> _pool = new Stack<GameObject>(160);
         private IUnitFactory _unitFactory;
@@ -77,6 +82,11 @@ namespace MobControlPrototype.Gameplay
             for (int i = ActiveCount - 1; i >= 0; i--)
             {
                 UnitRunner runner = _activeRunners[i];
+                if (runner.TickSpawnAnimation(Time.fixedDeltaTime))
+                {
+                    continue;
+                }
+
                 Rigidbody body = runner.Body;
                 Vector3 nextPosition = body != null ? body.position + delta : runner.transform.position + delta;
                 if (body != null)
@@ -90,7 +100,7 @@ namespace MobControlPrototype.Gameplay
 
                 if (nextPosition.z >= despawnZ)
                 {
-                    Despawn(runner);
+                    BeginRunnerRemoval(runner, false);
                 }
             }
         }
@@ -127,12 +137,12 @@ namespace MobControlPrototype.Gameplay
 
         public void RemoveRunner(UnitRunner runner)
         {
-            if (runner == null || !runner.IsActive)
-            {
-                return;
-            }
+            BeginRunnerRemoval(runner, false);
+        }
 
-            Despawn(runner);
+        public void RemoveRunnerWithSink(UnitRunner runner)
+        {
+            BeginRunnerRemoval(runner, true);
         }
 
         public void CompleteLevel(bool success)
@@ -173,23 +183,49 @@ namespace MobControlPrototype.Gameplay
             return _unitFactory.CreateUnit(transform, Vector3.zero, Quaternion.identity);
         }
 
-        private void Despawn(UnitRunner runner)
+        private void BeginRunnerRemoval(UnitRunner runner, bool playSinkAnimation)
         {
+            if (!ExtractRunner(runner))
+            {
+                return;
+            }
+
+            CountChanged?.Invoke(ActiveCount);
+
+            if (playSinkAnimation)
+            {
+                runner.PlaySinkOut(() => FinalizeRunnerDespawn(runner));
+                return;
+            }
+
+            FinalizeRunnerDespawn(runner);
+        }
+
+        private bool ExtractRunner(UnitRunner runner)
+        {
+            if (runner == null || !runner.IsActive)
+            {
+                return false;
+            }
+
             int index = runner.ActiveIndex;
             int lastIndex = _activeRunners.Count - 1;
             UnitRunner last = _activeRunners[lastIndex];
             _activeRunners[index] = last;
             last.ActiveIndex = index;
             _activeRunners.RemoveAt(lastIndex);
+            runner.PrepareForRemoval();
+            return true;
+        }
 
+        private void FinalizeRunnerDespawn(UnitRunner runner)
+        {
             runner.Deactivate();
             GameObject runnerObject = runner.gameObject;
             runnerObject.SetActive(false);
             runnerObject.transform.SetParent(_poolRoot, false);
             runnerObject.transform.localPosition = Vector3.zero;
             _pool.Push(runnerObject);
-
-            CountChanged?.Invoke(ActiveCount);
         }
 
         private UnitRunner EnsureRunnerComponents(GameObject runnerObject)
@@ -249,7 +285,8 @@ namespace MobControlPrototype.Gameplay
                 return 0;
             }
 
-            Vector3 basePosition = source.transform.position;
+            Vector3 sourcePosition = source.WorldPosition;
+            Vector3 basePosition = sourcePosition;
             basePosition.z = Mathf.Max(spawnZ, source.transform.position.z + cloneForwardOffset);
             Quaternion rotation = source.transform.rotation;
             int spawned = 0;
@@ -257,9 +294,16 @@ namespace MobControlPrototype.Gameplay
             for (int i = 0; i < extraCount; i++)
             {
                 float xOffset = GetCenteredOffset(i + 1, extraCount + 1) * cloneSpacing;
-                Vector3 position = basePosition + Vector3.right * xOffset;
-                if (SpawnRunner(position, rotation) != null)
+                Vector3 targetPosition = basePosition + Vector3.right * xOffset;
+                UnitRunner spawnedRunner = SpawnRunner(sourcePosition, rotation);
+                if (spawnedRunner != null)
                 {
+                    spawnedRunner.BeginSpawnAnimation(
+                        sourcePosition,
+                        targetPosition,
+                        cloneSpreadDuration,
+                        cloneSpreadArcHeight,
+                        cloneStartScaleMultiplier);
                     spawned++;
                 }
             }

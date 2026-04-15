@@ -9,10 +9,35 @@ namespace MobControlPrototype.Gameplay
         [SerializeField, Min(0.1f)] private float colliderHeight = 1.25f;
 
         private bool _isAlive = true;
+        private CapsuleCollider _trigger;
+        private Rigidbody _body;
+        private SinkFeedbackAnimator _sinkFeedback;
 
         private void Awake()
         {
             EnsurePhysics();
+            _sinkFeedback = GetComponent<SinkFeedbackAnimator>();
+            if (_sinkFeedback == null)
+            {
+                _sinkFeedback = gameObject.AddComponent<SinkFeedbackAnimator>();
+            }
+        }
+
+        private void OnEnable()
+        {
+            _isAlive = true;
+
+            if (_trigger != null)
+            {
+                _trigger.enabled = true;
+            }
+
+            if (_body != null)
+            {
+                _body.detectCollisions = true;
+            }
+
+            _sinkFeedback?.ResetImmediate();
         }
 
         public bool TryConsume(UnitRunner runner)
@@ -23,32 +48,58 @@ namespace MobControlPrototype.Gameplay
             }
 
             _isAlive = false;
-            runner.Manager.RemoveRunner(runner);
-            gameObject.SetActive(false);
+
+            if (_trigger != null)
+            {
+                _trigger.enabled = false;
+            }
+
+            if (_body != null)
+            {
+                _body.detectCollisions = false;
+            }
+
+            runner.Manager.RemoveRunnerWithSink(runner);
+
+            if (_sinkFeedback != null)
+            {
+                _sinkFeedback.Play(DeactivateSelf);
+            }
+            else
+            {
+                DeactivateSelf();
+            }
+
             return true;
         }
 
         private void EnsurePhysics()
         {
-            CapsuleCollider collider = GetComponent<CapsuleCollider>();
-            if (collider == null)
+            _trigger = GetComponent<CapsuleCollider>();
+            if (_trigger == null)
             {
-                collider = gameObject.AddComponent<CapsuleCollider>();
+                _trigger = gameObject.AddComponent<CapsuleCollider>();
             }
 
-            collider.isTrigger = true;
-            collider.radius = colliderRadius;
-            collider.height = colliderHeight;
-            collider.center = new Vector3(0f, colliderHeight * 0.5f, 0f);
+            _trigger.isTrigger = true;
+            _trigger.radius = colliderRadius;
+            _trigger.height = colliderHeight;
+            _trigger.center = new Vector3(0f, colliderHeight * 0.5f, 0f);
 
-            Rigidbody body = GetComponent<Rigidbody>();
-            if (body == null)
+            _body = GetComponent<Rigidbody>();
+            if (_body == null)
             {
-                body = gameObject.AddComponent<Rigidbody>();
+                _body = gameObject.AddComponent<Rigidbody>();
             }
 
-            body.isKinematic = true;
-            body.useGravity = false;
+            _body.isKinematic = true;
+            _body.useGravity = false;
+            _body.detectCollisions = true;
+        }
+
+        private void DeactivateSelf()
+        {
+            gameObject.SetActive(false);
         }
     }
 }

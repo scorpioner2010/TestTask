@@ -7,8 +7,10 @@ namespace MobControlPrototype.Gameplay
     public sealed class CannonShooter : MonoBehaviour
     {
         [Header("References")]
+        [SerializeField] private Transform spawnPoint;
         [SerializeField] private Transform muzzle;
         [SerializeField] private UnitRunnerManager runnerManager;
+        [SerializeField] private Transform recoilRoot;
 
         [Header("Movement")]
         [SerializeField, Min(0f)] private float horizontalSpeed = 5f;
@@ -22,19 +24,65 @@ namespace MobControlPrototype.Gameplay
         [SerializeField] private KeyCode keyboardFireKey = KeyCode.Space;
         [SerializeField] private Vector3 runnerSpawnOffset = new Vector3(0f, 0.12f, 0.95f);
 
+        [Header("Shot Feedback")]
+        [SerializeField, Min(0.05f)] private float recoilDuration = 0.16f;
+        [SerializeField] private Vector3 compressedScaleMultiplier = new Vector3(1.05f, 0.9f, 0.84f);
+        [SerializeField] private Vector3 stretchedScaleMultiplier = new Vector3(0.96f, 1.04f, 1.12f);
+
         private UnityEngine.Camera _camera;
         private float _shotTimer;
+        private float _recoilTimer;
+        private bool _isRecoiling;
+        private Vector3 _baseRecoilScale = Vector3.one;
+
+        private void Awake()
+        {
+            if (ShouldDisableAsDuplicate())
+            {
+                enabled = false;
+            }
+        }
 
         private void Start()
         {
+            if (!enabled)
+            {
+                return;
+            }
+
             if (runnerManager == null)
             {
                 ServiceLocator.TryGet(out runnerManager);
             }
 
+            if (spawnPoint == null)
+            {
+                spawnPoint = FindChildRecursive(transform, "Hole");
+            }
+
+            if (muzzle == null)
+            {
+                muzzle = FindChildRecursive(transform, "Muzzle");
+            }
+
             if (muzzle == null)
             {
                 muzzle = transform;
+            }
+
+            if (spawnPoint == null)
+            {
+                spawnPoint = muzzle;
+            }
+
+            if (recoilRoot == null)
+            {
+                recoilRoot = transform;
+            }
+
+            if (recoilRoot != null)
+            {
+                _baseRecoilScale = recoilRoot.localScale;
             }
 
             _camera = UnityEngine.Camera.main;
@@ -44,6 +92,7 @@ namespace MobControlPrototype.Gameplay
         {
             HandleHorizontalInput(Time.deltaTime);
             HandleShooting(Time.deltaTime);
+            UpdateShotFeedback(Time.deltaTime);
         }
 
         private void HandleHorizontalInput(float deltaTime)
@@ -117,9 +166,163 @@ namespace MobControlPrototype.Gameplay
 
         private void FireSingleRunner()
         {
-            Vector3 spawnPosition = muzzle.TransformPoint(runnerSpawnOffset);
+            Vector3 spawnPosition = spawnPoint != null
+                ? spawnPoint.position
+                : muzzle.TransformPoint(runnerSpawnOffset);
             Quaternion spawnRotation = Quaternion.LookRotation(Vector3.forward, Vector3.up);
-            runnerManager.FireUnit(spawnPosition, spawnRotation);
+            if (runnerManager.FireUnit(spawnPosition, spawnRotation) != null)
+            {
+                TriggerShotFeedback();
+            }
+        }
+
+        private static Transform FindChildRecursive(Transform root, string childName)
+        {
+            if (root == null)
+            {
+                return null;
+            }
+
+            for (int i = 0; i < root.childCount; i++)
+            {
+                Transform child = root.GetChild(i);
+                if (child.name == childName)
+                {
+                    return child;
+                }
+
+                Transform nested = FindChildRecursive(child, childName);
+                if (nested != null)
+                {
+                    return nested;
+                }
+            }
+
+            return null;
+        }
+
+        private void TriggerShotFeedback()
+        {
+            if (recoilRoot == null || recoilDuration <= 0f)
+            {
+                return;
+            }
+
+            _recoilTimer = 0f;
+            _isRecoiling = true;
+        }
+
+        private void UpdateShotFeedback(float deltaTime)
+        {
+            if (recoilRoot == null)
+            {
+                return;
+            }
+
+            if (!_isRecoiling)
+            {
+                recoilRoot.localScale = _baseRecoilScale;
+                return;
+            }
+
+            _recoilTimer += deltaTime;
+            float normalizedTime = Mathf.Clamp01(_recoilTimer / recoilDuration);
+            Vector3 compressedScale = Vector3.Scale(_baseRecoilScale, compressedScaleMultiplier);
+            Vector3 stretchedScale = Vector3.Scale(_baseRecoilScale, stretchedScaleMultiplier);
+
+            if (normalizedTime < 0.32f)
+            {
+                recoilRoot.localScale = Vector3.LerpUnclamped(_baseRecoilScale, compressedScale, normalizedTime / 0.32f);
+            }
+            else if (normalizedTime < 0.68f)
+            {
+                recoilRoot.localScale = Vector3.LerpUnclamped(compressedScale, stretchedScale, (normalizedTime - 0.32f) / 0.36f);
+            }
+            else
+            {
+                recoilRoot.localScale = Vector3.LerpUnclamped(stretchedScale, _baseRecoilScale, (normalizedTime - 0.68f) / 0.32f);
+            }
+
+            if (normalizedTime >= 1f)
+            {
+                _isRecoiling = false;
+                recoilRoot.localScale = _baseRecoilScale;
+            }
+        }
+
+        private bool ShouldDisableAsDuplicate()
+        {
+            Transform root = transform.root;
+            CannonShooter[] shooters = root.GetComponentsInChildren<CannonShooter>(true);
+            CannonShooter primary = this;
+
+            for (int i = 0; i < shooters.Length; i++)
+            {
+                CannonShooter candidate = shooters[i];
+                if (candidate == null)
+                {
+                    continue;
+                }
+
+                if (IsHigherPriority(candidate, primary))
+                {
+                    primary = candidate;
+                }
+            }
+
+            return primary != this;
+        }
+
+        private static bool IsHigherPriority(CannonShooter candidate, CannonShooter current)
+        {
+            int candidateScore = GetPriorityScore(candidate);
+            int currentScore = GetPriorityScore(current);
+            if (candidateScore != currentScore)
+            {
+                return candidateScore > currentScore;
+            }
+
+            int candidateDepth = GetHierarchyDepth(candidate.transform);
+            int currentDepth = GetHierarchyDepth(current.transform);
+            if (candidateDepth != currentDepth)
+            {
+                return candidateDepth < currentDepth;
+            }
+
+            return candidate.GetInstanceID() < current.GetInstanceID();
+        }
+
+        private static int GetPriorityScore(CannonShooter shooter)
+        {
+            int score = 0;
+            if (shooter.spawnPoint != null)
+            {
+                score += 4;
+            }
+
+            if (shooter.muzzle != null)
+            {
+                score += 2;
+            }
+
+            if (shooter.runnerManager != null)
+            {
+                score += 1;
+            }
+
+            return score;
+        }
+
+        private static int GetHierarchyDepth(Transform node)
+        {
+            int depth = 0;
+            while (node.parent != null)
+            {
+                depth++;
+                node = node.parent;
+            }
+
+            return depth;
         }
     }
 }

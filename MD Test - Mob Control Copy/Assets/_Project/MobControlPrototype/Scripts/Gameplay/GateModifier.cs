@@ -8,19 +8,37 @@ namespace MobControlPrototype.Gameplay
     {
         [SerializeField] private GateOperation operation = GateOperation.Add;
         [SerializeField, Min(1)] private int value = 10;
+        [SerializeField, Min(0.05f)] private float pulseDuration = 0.14f;
+        [SerializeField, Range(1f, 1.5f)] private float pulseScaleMultiplier = 1.08f;
+
+        private Vector3 _baseScale;
+        private Coroutine _pulseRoutine;
 
         public GateOperation Operation => operation;
         public int Value => value;
 
         private void Awake()
         {
+            _baseScale = transform.localScale;
             Collider trigger = GetComponent<Collider>();
             trigger.isTrigger = true;
+        }
+
+        private void OnEnable()
+        {
+            if (_baseScale == Vector3.zero)
+            {
+                _baseScale = transform.localScale;
+            }
+
+            transform.localScale = _baseScale;
         }
 
         private void OnValidate()
         {
             value = Mathf.Max(1, value);
+            pulseDuration = Mathf.Max(0.05f, pulseDuration);
+            pulseScaleMultiplier = Mathf.Max(1f, pulseScaleMultiplier);
             Collider trigger = GetComponent<Collider>();
             if (trigger != null)
             {
@@ -50,7 +68,55 @@ namespace MobControlPrototype.Gameplay
                 spawnZ = trigger.bounds.max.z + 0.8f;
             }
 
-            return runner.Manager.ApplyGate(runner, operation, value, spawnZ) != 0;
+            bool applied = runner.Manager.ApplyGate(runner, operation, value, spawnZ) != 0;
+            if (applied)
+            {
+                PlayPulse();
+            }
+
+            return applied;
+        }
+
+        private void PlayPulse()
+        {
+            if (!gameObject.activeInHierarchy)
+            {
+                return;
+            }
+
+            if (_pulseRoutine != null)
+            {
+                StopCoroutine(_pulseRoutine);
+            }
+
+            _pulseRoutine = StartCoroutine(PulseRoutine());
+        }
+
+        private System.Collections.IEnumerator PulseRoutine()
+        {
+            Vector3 pulseScale = _baseScale * pulseScaleMultiplier;
+            float halfDuration = pulseDuration * 0.5f;
+            float elapsed = 0f;
+
+            while (elapsed < halfDuration)
+            {
+                elapsed += Time.deltaTime;
+                float t = Mathf.Clamp01(elapsed / halfDuration);
+                transform.localScale = Vector3.LerpUnclamped(_baseScale, pulseScale, t);
+                yield return null;
+            }
+
+            elapsed = 0f;
+            while (elapsed < halfDuration)
+            {
+                elapsed += Time.deltaTime;
+                float t = Mathf.Clamp01(elapsed / halfDuration);
+                transform.localScale = Vector3.LerpUnclamped(pulseScale, _baseScale, t);
+                yield return null;
+            }
+
+            transform.localScale = _baseScale;
+            _pulseRoutine = null;
         }
     }
 }
