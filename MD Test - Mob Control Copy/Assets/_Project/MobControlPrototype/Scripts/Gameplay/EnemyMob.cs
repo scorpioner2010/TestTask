@@ -8,10 +8,17 @@ namespace MobControlPrototype.Gameplay
         [SerializeField, Min(0.1f)] private float colliderRadius = 0.28f;
         [SerializeField, Min(0.1f)] private float colliderHeight = 1.25f;
 
+        private EnemyRunnerManager _manager;
         private bool _isAlive = true;
         private CapsuleCollider _trigger;
         private Rigidbody _body;
         private SinkFeedbackAnimator _sinkFeedback;
+
+        public int ActiveIndex { get; set; }
+        public bool IsActive => _isAlive;
+        public EnemyRunnerManager Manager => _manager;
+        public Rigidbody Body => _body;
+        public Vector3 WorldPosition => _body != null ? _body.position : transform.position;
 
         private void Awake()
         {
@@ -40,13 +47,26 @@ namespace MobControlPrototype.Gameplay
             _sinkFeedback?.ResetImmediate();
         }
 
-        public bool TryConsume(UnitRunner runner)
+        public void Initialize(EnemyRunnerManager manager)
         {
-            if (!_isAlive || runner == null || !runner.IsActive)
+            _manager = manager;
+            _isAlive = true;
+
+            if (_trigger != null)
             {
-                return false;
+                _trigger.enabled = true;
             }
 
+            if (_body != null)
+            {
+                _body.detectCollisions = true;
+            }
+
+            _sinkFeedback?.ResetImmediate();
+        }
+
+        public void PrepareForRemoval()
+        {
             _isAlive = false;
 
             if (_trigger != null)
@@ -58,18 +78,45 @@ namespace MobControlPrototype.Gameplay
             {
                 _body.detectCollisions = false;
             }
+        }
+
+        public void Deactivate()
+        {
+            _isAlive = false;
+
+            if (_trigger != null)
+            {
+                _trigger.enabled = true;
+            }
+
+            if (_body != null)
+            {
+                _body.detectCollisions = true;
+            }
+
+            _sinkFeedback?.ResetImmediate();
+        }
+
+        public void PlaySinkOut(System.Action onComplete)
+        {
+            if (_sinkFeedback == null)
+            {
+                onComplete?.Invoke();
+                return;
+            }
+
+            _sinkFeedback.Play(onComplete);
+        }
+
+        public bool TryConsume(UnitRunner runner)
+        {
+            if (!_isAlive || _manager == null || runner == null || !runner.IsActive)
+            {
+                return false;
+            }
 
             runner.Manager.RemoveRunnerWithSink(runner);
-
-            if (_sinkFeedback != null)
-            {
-                _sinkFeedback.Play(DeactivateSelf);
-            }
-            else
-            {
-                DeactivateSelf();
-            }
-
+            _manager.RemoveEnemyWithSink(this);
             return true;
         }
 
@@ -97,9 +144,18 @@ namespace MobControlPrototype.Gameplay
             _body.detectCollisions = true;
         }
 
-        private void DeactivateSelf()
+        private void OnTriggerEnter(Collider other)
         {
-            gameObject.SetActive(false);
+            if (!_isAlive)
+            {
+                return;
+            }
+
+            PlayerCannonHitZone cannonHitZone = other.GetComponentInParent<PlayerCannonHitZone>();
+            if (cannonHitZone != null)
+            {
+                cannonHitZone.TryLose(this);
+            }
         }
     }
 }

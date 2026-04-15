@@ -44,11 +44,45 @@ namespace MobControlPrototype.Bootstrap
             {
                 ServiceLocator.Register(cannonShooter);
             }
+
+            SetupEnemyLoop();
         }
 
         private void OnDestroy()
         {
             ServiceLocator.Clear();
+        }
+
+        private void SetupEnemyLoop()
+        {
+            if (runnerManager == null || cannonShooter == null || unitPrefab == null)
+            {
+                return;
+            }
+
+            FinishTarget finishTarget = FindObjectOfType<FinishTarget>();
+            if (finishTarget == null)
+            {
+                return;
+            }
+
+            EnemyRunnerManager enemyManager = FindObjectOfType<EnemyRunnerManager>();
+            if (enemyManager == null)
+            {
+                GameObject managerObject = new GameObject("EnemyRunnerManager");
+                enemyManager = managerObject.AddComponent<EnemyRunnerManager>();
+            }
+
+            enemyManager.Configure(runnerManager, cannonShooter, finishTarget, unitPrefab);
+            ServiceLocator.Register(enemyManager);
+
+            PlayerCannonHitZone cannonHitZone = cannonShooter.GetComponent<PlayerCannonHitZone>();
+            if (cannonHitZone == null)
+            {
+                cannonHitZone = cannonShooter.gameObject.AddComponent<PlayerCannonHitZone>();
+            }
+
+            cannonHitZone.Configure(runnerManager);
         }
     }
 }

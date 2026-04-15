@@ -84,7 +84,7 @@ namespace MobControlPrototype.Crowd
 
             animator.applyRootMotion = false;
             animator.updateMode = AnimatorUpdateMode.Normal;
-            animator.cullingMode = AnimatorCullingMode.CullUpdateTransforms;
+            animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
 
             if (_runningClip == null)
             {

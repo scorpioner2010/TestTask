@@ -34,6 +34,26 @@ namespace MobControlPrototype.Gameplay
         private float _recoilTimer;
         private bool _isRecoiling;
         private Vector3 _baseRecoilScale = Vector3.one;
+        private Transform _cachedBaseScaleRoot;
+
+        public Vector3 SpawnWorldPosition
+        {
+            get
+            {
+                EnsureResolvedReferences();
+                if (spawnPoint != null)
+                {
+                    return spawnPoint.position;
+                }
+
+                if (muzzle != null)
+                {
+                    return muzzle.TransformPoint(runnerSpawnOffset);
+                }
+
+                return transform.position;
+            }
+        }
 
         private void Awake()
         {
@@ -50,6 +70,18 @@ namespace MobControlPrototype.Gameplay
                 return;
             }
 
+            EnsureResolvedReferences();
+
+            if (runnerManager == null)
+            {
+                ServiceLocator.TryGet(out runnerManager);
+            }
+
+            _camera = UnityEngine.Camera.main;
+        }
+
+        private void EnsureResolvedReferences()
+        {
             if (runnerManager == null)
             {
                 ServiceLocator.TryGet(out runnerManager);
@@ -80,12 +112,11 @@ namespace MobControlPrototype.Gameplay
                 recoilRoot = transform;
             }
 
-            if (recoilRoot != null)
+            if (recoilRoot != null && recoilRoot != _cachedBaseScaleRoot)
             {
                 _baseRecoilScale = recoilRoot.localScale;
+                _cachedBaseScaleRoot = recoilRoot;
             }
-
-            _camera = UnityEngine.Camera.main;
         }
 
         private void Update()
@@ -166,9 +197,8 @@ namespace MobControlPrototype.Gameplay
 
         private void FireSingleRunner()
         {
-            Vector3 spawnPosition = spawnPoint != null
-                ? spawnPoint.position
-                : muzzle.TransformPoint(runnerSpawnOffset);
+            EnsureResolvedReferences();
+            Vector3 spawnPosition = SpawnWorldPosition;
             Quaternion spawnRotation = Quaternion.LookRotation(Vector3.forward, Vector3.up);
             if (runnerManager.FireUnit(spawnPosition, spawnRotation) != null)
             {
@@ -208,6 +238,7 @@ namespace MobControlPrototype.Gameplay
                 return;
             }
 
+            recoilRoot.localScale = _baseRecoilScale;
             _recoilTimer = 0f;
             _isRecoiling = true;
         }

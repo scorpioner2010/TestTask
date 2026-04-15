@@ -356,7 +356,7 @@ namespace MobControlPrototype.Editor
             animator.runtimeAnimatorController = null;
             animator.applyRootMotion = false;
             animator.avatar = runnerAvatar;
-            animator.cullingMode = AnimatorCullingMode.CullUpdateTransforms;
+            animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
             animator.updateMode = AnimatorUpdateMode.Normal;
 
             UnitAnimationPlayer animationPlayer = animator.GetComponent<UnitAnimationPlayer>();
@@ -401,9 +401,7 @@ namespace MobControlPrototype.Editor
             GameObject cannon = CreateStartCannon(environment.transform, cannonMaterial, cannonModel);
             CreateGate(environment.transform, "Gate_Add_4", 8.2f, GateOperation.Add, 4, gateAddMaterial);
             CreateGate(environment.transform, "Gate_Multiply_2", 17.6f, GateOperation.Multiply, 2, gateMultiplyMaterial);
-            CreateEnemyGroup(environment.transform, "EnemyGroup_05", 27.5f, 5, runnerPrefab, enemyMaterial);
             CreateGate(environment.transform, "Gate_Multiply_3", 36.4f, GateOperation.Multiply, 3, gateMultiplyMaterial);
-            CreateEnemyGroup(environment.transform, "EnemyGroup_08", 46.8f, 8, runnerPrefab, enemyMaterial);
             finishTarget = CreateFinishTarget(environment.transform, finishMaterial);
             return cannon;
         }

@@ -58,7 +58,7 @@ namespace MobControlPrototype.Crowd
 
             animator.applyRootMotion = false;
             animator.updateMode = AnimatorUpdateMode.Normal;
-            animator.cullingMode = AnimatorCullingMode.CullUpdateTransforms;
+            animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
 
             _graph = PlayableGraph.Create($"{name}_Running");
             _graph.SetTimeUpdateMode(DirectorUpdateMode.GameTime);

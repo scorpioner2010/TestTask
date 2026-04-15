@@ -249,6 +249,9 @@ namespace MobControlPrototype.Gameplay
 
             body.isKinematic = true;
             body.useGravity = false;
+            body.interpolation = RigidbodyInterpolation.Interpolate;
+            body.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
+            body.constraints = RigidbodyConstraints.FreezeRotation;
 
             UnitRunner runner = runnerObject.GetComponent<UnitRunner>();
             if (runner == null)

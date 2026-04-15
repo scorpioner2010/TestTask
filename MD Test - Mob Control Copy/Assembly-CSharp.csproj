@@ -59,10 +59,12 @@
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Crowd\CrowdController.cs" />
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Gameplay\EnemyMob.cs" />
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Infrastructure\ServiceLocator.cs" />
+    <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Gameplay\PlayerCannonHitZone.cs" />
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Gameplay\SinkFeedbackAnimator.cs" />
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Gameplay\UnitBlocker.cs" />
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Crowd\UnitFactory.cs" />
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Crowd\ForwardMovementStrategy.cs" />
+    <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Gameplay\EnemyRunnerManager.cs" />
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Gameplay\UnitRunnerManager.cs" />
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Gameplay\GateOperation.cs" />
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Gameplay\CannonShooter.cs" />
