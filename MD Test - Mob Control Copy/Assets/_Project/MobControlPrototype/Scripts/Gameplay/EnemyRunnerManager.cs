@@ -227,36 +227,13 @@ namespace MobControlPrototype.Gameplay
 
         private EnemyMob EnsureEnemyComponents(GameObject enemyObject)
         {
-            CapsuleCollider collider = enemyObject.GetComponent<CapsuleCollider>();
-            if (collider == null)
-            {
-                collider = enemyObject.AddComponent<CapsuleCollider>();
-            }
-
-            collider.isTrigger = true;
-            collider.radius = colliderRadius;
-            collider.height = colliderHeight;
-            collider.center = new Vector3(0f, colliderHeight * 0.5f, 0f);
-
-            Rigidbody body = enemyObject.GetComponent<Rigidbody>();
-            if (body == null)
-            {
-                body = enemyObject.AddComponent<Rigidbody>();
-            }
-
-            body.isKinematic = true;
-            body.useGravity = false;
-            body.detectCollisions = true;
-            body.interpolation = RigidbodyInterpolation.Interpolate;
-            body.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
-            body.constraints = RigidbodyConstraints.FreezeRotation;
-
             EnemyMob enemy = enemyObject.GetComponent<EnemyMob>();
             if (enemy == null)
             {
                 enemy = enemyObject.AddComponent<EnemyMob>();
             }
 
+            enemy.ConfigurePhysics(colliderRadius, colliderHeight);
             return enemy;
         }
 

@@ -51,24 +51,19 @@
     <Compile Include="Assets\TestScript.cs" />
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Crowd\UnitAnimationPlayer.cs" />
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Gameplay\FinishTarget.cs" />
-    <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Gameplay\CrowdCountDisplay.cs" />
-    <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Bootstrap\PrototypeLevelBuilder.cs" />
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Crowd\IMovementStrategy.cs" />
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Gameplay\PrototypeHud.cs" />
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Bootstrap\PrototypeBootstrapper.cs" />
-    <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Crowd\CrowdController.cs" />
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Gameplay\EnemyMob.cs" />
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Infrastructure\ServiceLocator.cs" />
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Gameplay\PlayerCannonHitZone.cs" />
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Gameplay\SinkFeedbackAnimator.cs" />
-    <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Gameplay\UnitBlocker.cs" />
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Crowd\UnitFactory.cs" />
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Crowd\ForwardMovementStrategy.cs" />
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Gameplay\EnemyRunnerManager.cs" />
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Gameplay\UnitRunnerManager.cs" />
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Gameplay\GateOperation.cs" />
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Gameplay\CannonShooter.cs" />
-    <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Camera\FollowCamera.cs" />
     <Reference Include="UnityEngine">
       <HintPath>C:\Program Files\Unity\Hub\Editor\2022.3.16f1\Editor\Data\Managed\UnityEngine\UnityEngine.dll</HintPath>
     </Reference>

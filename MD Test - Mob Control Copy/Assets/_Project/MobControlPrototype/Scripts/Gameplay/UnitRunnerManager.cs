@@ -160,12 +160,24 @@ namespace MobControlPrototype.Gameplay
         private UnitRunner SpawnRunner(Vector3 worldPosition, Quaternion worldRotation)
         {
             GameObject instance = GetFromPool();
+            if (instance == null)
+            {
+                return null;
+            }
+
             instance.transform.SetParent(transform, true);
             instance.transform.SetPositionAndRotation(worldPosition, worldRotation);
             instance.name = $"Runner_{++_nextRunnerId:000}";
             instance.SetActive(true);
 
             UnitRunner runner = EnsureRunnerComponents(instance);
+            if (runner == null)
+            {
+                instance.SetActive(false);
+                instance.transform.SetParent(_poolRoot, false);
+                return null;
+            }
+
             runner.Initialize(this);
             runner.ActiveIndex = _activeRunners.Count;
             _activeRunners.Add(runner);
@@ -230,28 +242,13 @@ namespace MobControlPrototype.Gameplay
 
         private UnitRunner EnsureRunnerComponents(GameObject runnerObject)
         {
-            CapsuleCollider collider = runnerObject.GetComponent<CapsuleCollider>();
-            if (collider == null)
+            if (runnerObject == null)
             {
-                collider = runnerObject.AddComponent<CapsuleCollider>();
+                Debug.LogError("Cannot spawn runner: factory returned null.");
+                return null;
             }
 
-            collider.isTrigger = true;
-            collider.radius = runnerColliderRadius;
-            collider.height = runnerColliderHeight;
-            collider.center = new Vector3(0f, runnerColliderHeight * 0.5f, 0f);
-
-            Rigidbody body = runnerObject.GetComponent<Rigidbody>();
-            if (body == null)
-            {
-                body = runnerObject.AddComponent<Rigidbody>();
-            }
-
-            body.isKinematic = true;
-            body.useGravity = false;
-            body.interpolation = RigidbodyInterpolation.Interpolate;
-            body.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
-            body.constraints = RigidbodyConstraints.FreezeRotation;
+            EnsurePhysicsComponents(runnerObject);
 
             UnitRunner runner = runnerObject.GetComponent<UnitRunner>();
             if (runner == null)
@@ -259,7 +256,27 @@ namespace MobControlPrototype.Gameplay
                 runner = runnerObject.AddComponent<UnitRunner>();
             }
 
+            if (runner == null)
+            {
+                Debug.LogError($"Cannot spawn runner: UnitRunner component was not added to {runnerObject.name}.");
+                return null;
+            }
+
+            runner.ConfigurePhysics(runnerColliderRadius, runnerColliderHeight);
             return runner;
+        }
+
+        private static void EnsurePhysicsComponents(GameObject runnerObject)
+        {
+            if (runnerObject.GetComponent<CapsuleCollider>() == null)
+            {
+                runnerObject.AddComponent<CapsuleCollider>();
+            }
+
+            if (runnerObject.GetComponent<Rigidbody>() == null)
+            {
+                runnerObject.AddComponent<Rigidbody>();
+            }
         }
 
         private void EnsurePoolRoot()

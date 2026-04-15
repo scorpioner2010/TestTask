@@ -4,12 +4,12 @@ using UnityEngine;
 
 namespace MobControlPrototype.Gameplay
 {
-    [RequireComponent(typeof(Collider))]
+    [RequireComponent(typeof(CapsuleCollider))]
     [RequireComponent(typeof(Rigidbody))]
     [DisallowMultipleComponent]
     public sealed class UnitRunner : MonoBehaviour
     {
-        private readonly List<int> _passedGateIds = new List<int>(4);
+        private readonly HashSet<int> _passedGateIds = new HashSet<int>();
         private UnitRunnerManager _manager;
         private Rigidbody _body;
         private Collider _trigger;
@@ -33,15 +33,27 @@ namespace MobControlPrototype.Gameplay
 
         private void Awake()
         {
-            _body = GetComponent<Rigidbody>();
-            _trigger = GetComponent<Collider>();
-            _sinkFeedback = GetComponent<SinkFeedbackAnimator>();
-            if (_sinkFeedback == null)
+            EnsureRuntimeComponents();
+            ResolveVisualRoot();
+        }
+
+        public void ConfigurePhysics(float colliderRadius, float colliderHeight)
+        {
+            EnsureRuntimeComponents();
+
+            _trigger.isTrigger = true;
+            if (_trigger is CapsuleCollider capsule)
             {
-                _sinkFeedback = gameObject.AddComponent<SinkFeedbackAnimator>();
+                capsule.radius = colliderRadius;
+                capsule.height = colliderHeight;
+                capsule.center = new Vector3(0f, colliderHeight * 0.5f, 0f);
             }
 
-            ResolveVisualRoot();
+            _body.isKinematic = true;
+            _body.useGravity = false;
+            _body.interpolation = RigidbodyInterpolation.Interpolate;
+            _body.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
+            _body.constraints = RigidbodyConstraints.FreezeRotation;
         }
 
         public void Initialize(UnitRunnerManager manager)
@@ -49,51 +61,14 @@ namespace MobControlPrototype.Gameplay
             _manager = manager;
             IsActive = true;
             _passedGateIds.Clear();
-            if (_body == null)
-            {
-                _body = GetComponent<Rigidbody>();
-            }
-
-            if (_trigger == null)
-            {
-                _trigger = GetComponent<Collider>();
-            }
-
-            if (_trigger != null)
-            {
-                _trigger.enabled = true;
-            }
-
-            if (_body != null)
-            {
-                _body.detectCollisions = true;
-            }
-
-            _isSpawnAnimating = false;
-            _spawnElapsed = 0f;
-            _sinkFeedback?.ResetImmediate();
-            ResetVisualScale();
+            ResetRuntimeState();
         }
 
         public void Deactivate()
         {
             IsActive = false;
             _passedGateIds.Clear();
-
-            if (_trigger != null)
-            {
-                _trigger.enabled = true;
-            }
-
-            if (_body != null)
-            {
-                _body.detectCollisions = true;
-            }
-
-            _isSpawnAnimating = false;
-            _spawnElapsed = 0f;
-            _sinkFeedback?.ResetImmediate();
-            ResetVisualScale();
+            ResetRuntimeState();
         }
 
         public bool HasPassedGate(int gateId)
@@ -103,10 +78,7 @@ namespace MobControlPrototype.Gameplay
 
         public void MarkGatePassed(int gateId)
         {
-            if (!_passedGateIds.Contains(gateId))
-            {
-                _passedGateIds.Add(gateId);
-            }
+            _passedGateIds.Add(gateId);
         }
 
         public void PrepareForRemoval()
@@ -115,17 +87,7 @@ namespace MobControlPrototype.Gameplay
             _passedGateIds.Clear();
             _isSpawnAnimating = false;
             _spawnElapsed = 0f;
-
-            if (_trigger != null)
-            {
-                _trigger.enabled = false;
-            }
-
-            if (_body != null)
-            {
-                _body.detectCollisions = false;
-            }
-
+            SetCollisionState(false);
             ResetVisualScale();
         }
 
@@ -158,16 +120,7 @@ namespace MobControlPrototype.Gameplay
             _isSpawnAnimating = true;
 
             SetWorldPosition(startPosition);
-
-            if (_trigger != null)
-            {
-                _trigger.enabled = false;
-            }
-
-            if (_body != null)
-            {
-                _body.detectCollisions = false;
-            }
+            SetCollisionState(false);
 
             if (_visualRoot != null)
             {
@@ -207,16 +160,7 @@ namespace MobControlPrototype.Gameplay
             _isSpawnAnimating = false;
             SetWorldPosition(_spawnTargetPosition);
             ResetVisualScale();
-
-            if (_trigger != null)
-            {
-                _trigger.enabled = true;
-            }
-
-            if (_body != null)
-            {
-                _body.detectCollisions = true;
-            }
+            SetCollisionState(true);
 
             return true;
         }
@@ -258,6 +202,63 @@ namespace MobControlPrototype.Gameplay
             }
 
             transform.position = position;
+        }
+
+        private void EnsureRuntimeComponents()
+        {
+            if (_trigger == null)
+            {
+                _trigger = GetComponent<CapsuleCollider>();
+                if (_trigger == null)
+                {
+                    _trigger = GetComponent<Collider>();
+                }
+
+                if (_trigger == null)
+                {
+                    _trigger = gameObject.AddComponent<CapsuleCollider>();
+                }
+            }
+
+            if (_body == null)
+            {
+                _body = GetComponent<Rigidbody>();
+                if (_body == null)
+                {
+                    _body = gameObject.AddComponent<Rigidbody>();
+                }
+            }
+
+            if (_sinkFeedback == null)
+            {
+                _sinkFeedback = GetComponent<SinkFeedbackAnimator>();
+                if (_sinkFeedback == null)
+                {
+                    _sinkFeedback = gameObject.AddComponent<SinkFeedbackAnimator>();
+                }
+            }
+        }
+
+        private void ResetRuntimeState()
+        {
+            _isSpawnAnimating = false;
+            _spawnElapsed = 0f;
+            SetCollisionState(true);
+            _sinkFeedback?.ResetImmediate();
+            ResetVisualScale();
+        }
+
+        private void SetCollisionState(bool enabled)
+        {
+            if (_trigger != null)
+            {
+                _trigger.enabled = enabled;
+            }
+
+            if (_body != null)
+            {
+                _body.detectCollisions = enabled;
+            }
         }
 
         private void ResolveVisualRoot()

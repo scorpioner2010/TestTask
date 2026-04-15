@@ -68,7 +68,6 @@ namespace MobControlPrototype.Editor
             Material cannonMaterial = CreateMaterial(ProjectRoot + "/Materials/Prototype_CannonDark.mat", new Color(0.04f, 0.05f, 0.06f), 0.42f);
             Material gateAddMaterial = CreateMaterial(ProjectRoot + "/Materials/Prototype_GateAdd.mat", new Color(0.11f, 0.72f, 0.34f), 0.24f);
             Material gateMultiplyMaterial = CreateMaterial(ProjectRoot + "/Materials/Prototype_GateMultiply.mat", new Color(0.08f, 0.42f, 0.92f), 0.24f);
-            Material enemyMaterial = CreateMaterial(ProjectRoot + "/Materials/Prototype_RunnerRed.mat", new Color(0.84f, 0.18f, 0.22f), 0.28f);
             Material finishMaterial = CreateMaterial(ProjectRoot + "/Materials/Prototype_FinishTarget.mat", new Color(0.98f, 0.8f, 0.18f), 0.36f);
 
             GameObject runnerModel = AssetDatabase.LoadAssetAtPath<GameObject>(RunnerModelPath);
@@ -127,9 +126,7 @@ namespace MobControlPrototype.Editor
                 cannonModel,
                 gateAddMaterial,
                 gateMultiplyMaterial,
-                enemyMaterial,
                 finishMaterial,
-                runnerPrefab,
                 out finishTarget);
 
             UnitRunnerManager runnerManager = CreateRunnerManager();
@@ -381,9 +378,7 @@ namespace MobControlPrototype.Editor
             GameObject cannonModel,
             Material gateAddMaterial,
             Material gateMultiplyMaterial,
-            Material enemyMaterial,
             Material finishMaterial,
-            GameObject runnerPrefab,
             out FinishTarget finishTarget)
         {
             GameObject environment = new GameObject("Environment");
@@ -485,70 +480,6 @@ namespace MobControlPrototype.Editor
             serializedGate.ApplyModifiedPropertiesWithoutUndo();
         }
 
-        private static void CreateEnemyGroup(Transform parent, string name, float zPosition, int count, GameObject runnerPrefab, Material enemyMaterial)
-        {
-            GameObject group = new GameObject(name);
-            group.transform.SetParent(parent, false);
-            group.transform.localPosition = new Vector3(0f, 0.12f, zPosition);
-
-            int unitsPerRow = Mathf.Min(4, count);
-            float spacing = 0.82f;
-
-            for (int i = 0; i < count; i++)
-            {
-                int row = i / unitsPerRow;
-                int column = i % unitsPerRow;
-                int rowCount = Mathf.Min(unitsPerRow, count - row * unitsPerRow);
-                float xOffset = (column - (rowCount - 1) * 0.5f) * spacing;
-                float zOffset = row * 0.78f;
-                CreateEnemyUnit(group.transform, new Vector3(xOffset, 0f, zOffset), runnerPrefab, enemyMaterial);
-            }
-        }
-
-        private static void CreateEnemyUnit(Transform parent, Vector3 localPosition, GameObject runnerPrefab, Material enemyMaterial)
-        {
-            GameObject enemy = PrefabUtility.InstantiatePrefab(runnerPrefab) as GameObject;
-            if (enemy == null)
-            {
-                enemy = new GameObject("EnemyMob");
-            }
-
-            enemy.name = "EnemyMob";
-            enemy.transform.SetParent(parent, false);
-            enemy.transform.localPosition = localPosition;
-            enemy.transform.localRotation = Quaternion.identity;
-            AssignMaterial(enemy, enemyMaterial);
-            enemy.AddComponent<EnemyMob>();
-        }
-
-        private static void CreateBlocker(Transform parent, string name, float zPosition, int health, Material material)
-        {
-            GameObject blocker = new GameObject(name);
-            blocker.transform.SetParent(parent, false);
-            blocker.transform.localPosition = new Vector3(0f, 0.1f, zPosition);
-
-            BoxCollider trigger = blocker.AddComponent<BoxCollider>();
-            trigger.isTrigger = true;
-            trigger.center = new Vector3(0f, 0.75f, 0f);
-            trigger.size = new Vector3(5.6f, 1.5f, 1.1f);
-
-            GameObject visuals = new GameObject("Visuals");
-            visuals.transform.SetParent(blocker.transform, false);
-
-            CreateBox("Block_A", new Vector3(-1.4f, 0.55f, 0f), new Vector3(0.9f, 1.1f, 0.85f), material, visuals.transform);
-            CreateBox("Block_B", new Vector3(0f, 0.75f, 0f), new Vector3(1f, 1.5f, 0.85f), material, visuals.transform);
-            CreateBox("Block_C", new Vector3(1.4f, 0.55f, 0f), new Vector3(0.9f, 1.1f, 0.85f), material, visuals.transform);
-
-            TextMesh label = CreateWorldText("BlockerLabel", blocker.transform, new Vector3(0f, 2.0f, -0.05f), $"-{health}", Color.white, 0.34f);
-
-            UnitBlocker unitBlocker = blocker.AddComponent<UnitBlocker>();
-            SerializedObject serializedBlocker = new SerializedObject(unitBlocker);
-            serializedBlocker.FindProperty("health").intValue = health;
-            serializedBlocker.FindProperty("label").objectReferenceValue = label;
-            serializedBlocker.FindProperty("visualRoot").objectReferenceValue = visuals;
-            serializedBlocker.ApplyModifiedPropertiesWithoutUndo();
-        }
-
         private static FinishTarget CreateFinishTarget(Transform parent, Material material)
         {
             GameObject finish = new GameObject("FinalTarget");
@@ -578,23 +509,6 @@ namespace MobControlPrototype.Editor
             return target;
         }
 
-        private static TextMesh CreateWorldText(string name, Transform parent, Vector3 localPosition, string text, Color color, float characterSize)
-        {
-            GameObject textObject = new GameObject(name);
-            textObject.transform.SetParent(parent, false);
-            textObject.transform.localPosition = localPosition;
-            textObject.transform.localRotation = Quaternion.Euler(60f, 0f, 0f);
-
-            TextMesh textMesh = textObject.AddComponent<TextMesh>();
-            textMesh.text = text;
-            textMesh.anchor = TextAnchor.MiddleCenter;
-            textMesh.alignment = TextAlignment.Center;
-            textMesh.characterSize = characterSize;
-            textMesh.fontSize = 96;
-            textMesh.color = color;
-            return textMesh;
-        }
-
         private static GameObject CreateStartCannon(Transform parent, Material cannonMaterial, GameObject cannonModel)
         {
             GameObject cannon = PrefabUtility.InstantiatePrefab(cannonModel) as GameObject;
@@ -613,45 +527,6 @@ namespace MobControlPrototype.Editor
             GroundObject(cannon);
             AssignMaterial(cannon, cannonMaterial);
             return cannon;
-        }
-
-        private static CrowdController CreateCrowdRoot()
-        {
-            GameObject crowdRoot = new GameObject("CrowdRoot");
-            crowdRoot.transform.position = new Vector3(0f, 0.12f, 0f);
-
-            CrowdController crowdController = crowdRoot.AddComponent<CrowdController>();
-            SerializedObject serializedCrowd = new SerializedObject(crowdController);
-            serializedCrowd.FindProperty("initialUnitCount").intValue = 8;
-            serializedCrowd.FindProperty("totalSpawnCount").intValue = 42;
-            serializedCrowd.FindProperty("maxActiveUnits").intValue = 120;
-            serializedCrowd.FindProperty("spawnRate").floatValue = 8f;
-            serializedCrowd.FindProperty("spawnLocalOffset").vector3Value = new Vector3(0f, 0f, -1.4f);
-            serializedCrowd.FindProperty("unitsPerRow").intValue = 5;
-            serializedCrowd.FindProperty("horizontalSpacing").floatValue = 0.58f;
-            serializedCrowd.FindProperty("depthSpacing").floatValue = 0.66f;
-            serializedCrowd.FindProperty("reflowLerp").floatValue = 18f;
-
-            BoxCollider crowdTrigger = crowdRoot.AddComponent<BoxCollider>();
-            crowdTrigger.isTrigger = true;
-            crowdTrigger.center = new Vector3(0f, 0.9f, -0.7f);
-            crowdTrigger.size = new Vector3(3.8f, 1.8f, 2.4f);
-            serializedCrowd.FindProperty("crowdTrigger").objectReferenceValue = crowdTrigger;
-            serializedCrowd.ApplyModifiedPropertiesWithoutUndo();
-
-            Rigidbody body = crowdRoot.AddComponent<Rigidbody>();
-            body.isKinematic = true;
-            body.useGravity = false;
-
-            TextMesh countLabel = CreateWorldText("CrowdCountLabel", crowdRoot.transform, new Vector3(0f, 2.2f, -1.1f), "Units: 0", Color.white, 0.28f);
-            CrowdCountDisplay countDisplay = countLabel.gameObject.AddComponent<CrowdCountDisplay>();
-            SerializedObject serializedDisplay = new SerializedObject(countDisplay);
-            serializedDisplay.FindProperty("crowd").objectReferenceValue = crowdController;
-            serializedDisplay.FindProperty("label").objectReferenceValue = countLabel;
-            serializedDisplay.FindProperty("prefix").stringValue = "Units: ";
-            serializedDisplay.ApplyModifiedPropertiesWithoutUndo();
-
-            return crowdController;
         }
 
         private static UnitRunnerManager CreateRunnerManager()
@@ -780,33 +655,6 @@ namespace MobControlPrototype.Editor
             outline.effectDistance = new Vector2(2f, -2f);
 
             return uiText;
-        }
-
-        private static MobControlPrototype.Camera.FollowCamera CreateFollowCamera(Transform target)
-        {
-            GameObject cameraObject = new GameObject("Main Camera");
-            cameraObject.tag = "MainCamera";
-            cameraObject.transform.SetPositionAndRotation(new Vector3(0f, 7.6f, -10.4f), Quaternion.Euler(55f, 0f, 0f));
-
-            UnityEngine.Camera camera = cameraObject.AddComponent<UnityEngine.Camera>();
-            camera.clearFlags = CameraClearFlags.SolidColor;
-            camera.backgroundColor = new Color(0.62f, 0.78f, 0.92f);
-            camera.fieldOfView = 58f;
-            camera.nearClipPlane = 0.1f;
-            camera.farClipPlane = 120f;
-
-            cameraObject.AddComponent<AudioListener>();
-
-            MobControlPrototype.Camera.FollowCamera followCamera = cameraObject.AddComponent<MobControlPrototype.Camera.FollowCamera>();
-            SerializedObject serializedCamera = new SerializedObject(followCamera);
-            serializedCamera.FindProperty("target").objectReferenceValue = target;
-            serializedCamera.FindProperty("offset").vector3Value = new Vector3(0f, 7.6f, -10.4f);
-            serializedCamera.FindProperty("lookAtOffset").vector3Value = new Vector3(0f, 1.05f, 2.9f);
-            serializedCamera.FindProperty("smoothTime").floatValue = 0.18f;
-            serializedCamera.FindProperty("rotationSharpness").floatValue = 13f;
-            serializedCamera.ApplyModifiedPropertiesWithoutUndo();
-
-            return followCamera;
         }
 
         private static void EnsureMainCameraExists()

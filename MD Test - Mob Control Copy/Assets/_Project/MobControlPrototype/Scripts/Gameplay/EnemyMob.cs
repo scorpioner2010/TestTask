@@ -5,9 +5,6 @@ namespace MobControlPrototype.Gameplay
     [DisallowMultipleComponent]
     public sealed class EnemyMob : MonoBehaviour
     {
-        [SerializeField, Min(0.1f)] private float colliderRadius = 0.28f;
-        [SerializeField, Min(0.1f)] private float colliderHeight = 1.25f;
-
         private EnemyRunnerManager _manager;
         private bool _isAlive = true;
         private CapsuleCollider _trigger;
@@ -22,78 +19,46 @@ namespace MobControlPrototype.Gameplay
 
         private void Awake()
         {
-            EnsurePhysics();
-            _sinkFeedback = GetComponent<SinkFeedbackAnimator>();
-            if (_sinkFeedback == null)
-            {
-                _sinkFeedback = gameObject.AddComponent<SinkFeedbackAnimator>();
-            }
+            EnsureRuntimeComponents();
         }
 
         private void OnEnable()
         {
-            _isAlive = true;
+            ResetRuntimeState();
+        }
 
-            if (_trigger != null)
-            {
-                _trigger.enabled = true;
-            }
+        public void ConfigurePhysics(float colliderRadius, float colliderHeight)
+        {
+            EnsureRuntimeComponents();
 
-            if (_body != null)
-            {
-                _body.detectCollisions = true;
-            }
+            _trigger.isTrigger = true;
+            _trigger.radius = colliderRadius;
+            _trigger.height = colliderHeight;
+            _trigger.center = new Vector3(0f, colliderHeight * 0.5f, 0f);
 
-            _sinkFeedback?.ResetImmediate();
+            _body.isKinematic = true;
+            _body.useGravity = false;
+            _body.interpolation = RigidbodyInterpolation.Interpolate;
+            _body.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
+            _body.constraints = RigidbodyConstraints.FreezeRotation;
         }
 
         public void Initialize(EnemyRunnerManager manager)
         {
             _manager = manager;
-            _isAlive = true;
-
-            if (_trigger != null)
-            {
-                _trigger.enabled = true;
-            }
-
-            if (_body != null)
-            {
-                _body.detectCollisions = true;
-            }
-
-            _sinkFeedback?.ResetImmediate();
+            ResetRuntimeState();
         }
 
         public void PrepareForRemoval()
         {
             _isAlive = false;
-
-            if (_trigger != null)
-            {
-                _trigger.enabled = false;
-            }
-
-            if (_body != null)
-            {
-                _body.detectCollisions = false;
-            }
+            SetCollisionState(false);
         }
 
         public void Deactivate()
         {
             _isAlive = false;
-
-            if (_trigger != null)
-            {
-                _trigger.enabled = true;
-            }
-
-            if (_body != null)
-            {
-                _body.detectCollisions = true;
-            }
-
+            SetCollisionState(true);
             _sinkFeedback?.ResetImmediate();
         }
 
@@ -120,28 +85,54 @@ namespace MobControlPrototype.Gameplay
             return true;
         }
 
-        private void EnsurePhysics()
+        private void EnsureRuntimeComponents()
         {
-            _trigger = GetComponent<CapsuleCollider>();
             if (_trigger == null)
             {
-                _trigger = gameObject.AddComponent<CapsuleCollider>();
+                _trigger = GetComponent<CapsuleCollider>();
+                if (_trigger == null)
+                {
+                    _trigger = gameObject.AddComponent<CapsuleCollider>();
+                }
             }
 
-            _trigger.isTrigger = true;
-            _trigger.radius = colliderRadius;
-            _trigger.height = colliderHeight;
-            _trigger.center = new Vector3(0f, colliderHeight * 0.5f, 0f);
-
-            _body = GetComponent<Rigidbody>();
             if (_body == null)
             {
-                _body = gameObject.AddComponent<Rigidbody>();
+                _body = GetComponent<Rigidbody>();
+                if (_body == null)
+                {
+                    _body = gameObject.AddComponent<Rigidbody>();
+                }
             }
 
-            _body.isKinematic = true;
-            _body.useGravity = false;
-            _body.detectCollisions = true;
+            if (_sinkFeedback == null)
+            {
+                _sinkFeedback = GetComponent<SinkFeedbackAnimator>();
+                if (_sinkFeedback == null)
+                {
+                    _sinkFeedback = gameObject.AddComponent<SinkFeedbackAnimator>();
+                }
+            }
+        }
+
+        private void ResetRuntimeState()
+        {
+            _isAlive = true;
+            SetCollisionState(true);
+            _sinkFeedback?.ResetImmediate();
+        }
+
+        private void SetCollisionState(bool enabled)
+        {
+            if (_trigger != null)
+            {
+                _trigger.enabled = enabled;
+            }
+
+            if (_body != null)
+            {
+                _body.detectCollisions = enabled;
+            }
         }
 
         private void OnTriggerEnter(Collider other)
