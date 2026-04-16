@@ -17,7 +17,7 @@ namespace MobControlPrototype.Editor
         private const string UnitPrefabPath = ProjectRoot + "/Prefabs/RunnerUnit.prefab";
         private const string RunnerModelPath = "Assets/Models/LowPoly_Stickaman_Running.fbx";
         private const string CannonModelPath = "Assets/Models/Cannon.fbx";
-        private const string AutoBuildVersion = "stage04-simple-permanent-gates-ui-v2";
+        private const string AutoBuildVersion = "stage05-wide-road-moving-gates-v4";
 
         [InitializeOnLoadMethod]
         private static void AutoRebuildOnceAfterScriptsReload()
@@ -381,22 +381,36 @@ namespace MobControlPrototype.Editor
             Material finishMaterial,
             out FinishTarget finishTarget)
         {
+            const float roadWidth = 14.4f;
+            const float roadHalfWidth = roadWidth * 0.5f;
+            const float railOffset = roadHalfWidth + 0.35f;
+
             GameObject environment = new GameObject("Environment");
 
-            CreateBox("Ground", new Vector3(0f, -0.12f, 29f), new Vector3(24f, 0.16f, 84f), groundMaterial, environment.transform);
-            CreateBox("Road", new Vector3(0f, 0f, 29f), new Vector3(7.2f, 0.18f, 78f), roadMaterial, environment.transform);
-            CreateBox("LeftRail", new Vector3(-3.9f, 0.18f, 29f), new Vector3(0.28f, 0.28f, 78f), railMaterial, environment.transform);
-            CreateBox("RightRail", new Vector3(3.9f, 0.18f, 29f), new Vector3(0.28f, 0.28f, 78f), railMaterial, environment.transform);
+            CreateBox("Ground", new Vector3(0f, -0.12f, 29f), new Vector3(32f, 0.16f, 84f), groundMaterial, environment.transform);
+            CreateBox("Road", new Vector3(0f, 0f, 29f), new Vector3(roadWidth, 0.18f, 78f), roadMaterial, environment.transform);
+            CreateBox("LeftRail", new Vector3(-railOffset, 0.18f, 29f), new Vector3(0.32f, 0.28f, 78f), railMaterial, environment.transform);
+            CreateBox("RightRail", new Vector3(railOffset, 0.18f, 29f), new Vector3(0.32f, 0.28f, 78f), railMaterial, environment.transform);
 
+            float[] laneMarkerXs = { -3.6f, 0f, 3.6f };
             for (int i = 0; i < 16; i++)
             {
-                CreateBox($"LaneMarker_{i + 1:00}", new Vector3(0f, 0.11f, -5f + i * 4.6f), new Vector3(0.16f, 0.04f, 1.7f), laneMaterial, environment.transform);
+                float z = -5f + i * 4.6f;
+                for (int laneIndex = 0; laneIndex < laneMarkerXs.Length; laneIndex++)
+                {
+                    CreateBox(
+                        $"LaneMarker_{laneIndex + 1}_{i + 1:00}",
+                        new Vector3(laneMarkerXs[laneIndex], 0.11f, z),
+                        new Vector3(0.16f, 0.04f, 1.7f),
+                        laneMaterial,
+                        environment.transform);
+                }
             }
 
             GameObject cannon = CreateStartCannon(environment.transform, cannonMaterial, cannonModel);
-            CreateGate(environment.transform, "Gate_Add_4", 8.2f, GateOperation.Add, 4, gateAddMaterial);
-            CreateGate(environment.transform, "Gate_Multiply_2", 17.6f, GateOperation.Multiply, 2, gateMultiplyMaterial);
-            CreateGate(environment.transform, "Gate_Multiply_3", 36.4f, GateOperation.Multiply, 3, gateMultiplyMaterial);
+            CreateGate(environment.transform, "Gate_Add_4", 8.2f, GateOperation.Add, 4, gateAddMaterial, 2.9f, 2.7f, 0f);
+            CreateGate(environment.transform, "Gate_Multiply_2", 17.6f, GateOperation.Multiply, 2, gateMultiplyMaterial, 3.4f, 3.2f, 0.45f);
+            CreateGate(environment.transform, "Gate_Multiply_3", 36.4f, GateOperation.Multiply, 3, gateMultiplyMaterial, 3.7f, 2.9f, 0.9f);
             finishTarget = CreateFinishTarget(environment.transform, finishMaterial);
             return cannon;
         }
@@ -449,34 +463,40 @@ namespace MobControlPrototype.Editor
             return cylinder;
         }
 
-        private static void CreateGate(Transform parent, string name, float zPosition, GateOperation operation, int value, Material material)
+        private static void CreateGate(
+            Transform parent,
+            string name,
+            float zPosition,
+            GateOperation operation,
+            int value,
+            Material material,
+            float moveDistance,
+            float cycleDuration,
+            float phaseOffset)
         {
-            GameObject gate = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            GameObject gate = new GameObject(name);
             gate.name = name;
             gate.transform.SetParent(parent, false);
-            gate.transform.localPosition = new Vector3(0f, 0.1f, zPosition);
-            gate.transform.localScale = new Vector3(6.4f, 2.2f, 0.35f);
+            gate.transform.localPosition = new Vector3(0f, 0f, zPosition);
 
-            Renderer renderer = gate.GetComponent<Renderer>();
-            if (renderer != null)
-            {
-                renderer.sharedMaterial = material;
-            }
+            GameObject frame = CreateBox("Frame", new Vector3(0f, 1.18f, 0f), new Vector3(6.8f, 2.2f, 0.42f), material, gate.transform);
+            GameObjectUtility.SetStaticEditorFlags(frame, 0);
+            CreateGateLabel(frame.transform, operation, value, 0.24f);
 
-            BoxCollider trigger = gate.GetComponent<BoxCollider>();
-            if (trigger == null)
-            {
-                trigger = gate.AddComponent<BoxCollider>();
-            }
+            BoxCollider trigger = gate.AddComponent<BoxCollider>();
+            trigger.center = new Vector3(0f, 1.18f, 0f);
+            trigger.size = new Vector3(6.9f, 2.25f, 1.15f);
 
             trigger.isTrigger = true;
-            trigger.center = new Vector3(0f, 0.38f, 0f);
-            trigger.size = new Vector3(1.04f, 0.82f, 2.6f);
 
             GateModifier modifier = gate.AddComponent<GateModifier>();
             SerializedObject serializedGate = new SerializedObject(modifier);
             serializedGate.FindProperty("operation").enumValueIndex = (int)operation;
             serializedGate.FindProperty("value").intValue = value;
+            serializedGate.FindProperty("moveHorizontally").boolValue = true;
+            serializedGate.FindProperty("horizontalTravelDistance").floatValue = moveDistance;
+            serializedGate.FindProperty("horizontalCycleDuration").floatValue = cycleDuration;
+            serializedGate.FindProperty("horizontalPhaseOffset").floatValue = phaseOffset;
             serializedGate.ApplyModifiedPropertiesWithoutUndo();
         }
 
@@ -489,7 +509,7 @@ namespace MobControlPrototype.Editor
             BoxCollider trigger = finish.AddComponent<BoxCollider>();
             trigger.isTrigger = true;
             trigger.center = new Vector3(0f, 1.3f, 0f);
-            trigger.size = new Vector3(6.8f, 2.6f, 1.3f);
+            trigger.size = new Vector3(13.6f, 2.6f, 1.3f);
 
             GameObject baseObject = CreateCylinder("TowerBase", new Vector3(0f, 0.35f, 0f), new Vector3(1.9f, 0.35f, 1.9f), material, finish.transform);
             GameObject tower = CreateCylinder("Tower", new Vector3(0f, 1.35f, 0f), new Vector3(1.15f, 1.2f, 1.15f), material, finish.transform);
@@ -511,22 +531,36 @@ namespace MobControlPrototype.Editor
 
         private static GameObject CreateStartCannon(Transform parent, Material cannonMaterial, GameObject cannonModel)
         {
-            GameObject cannon = PrefabUtility.InstantiatePrefab(cannonModel) as GameObject;
-            if (cannon == null)
+            GameObject cannonRoot = new GameObject("StartCannon");
+            cannonRoot.transform.SetParent(parent, false);
+            cannonRoot.transform.position = new Vector3(0f, 0.14f, -6.2f);
+            cannonRoot.transform.rotation = Quaternion.identity;
+
+            GameObject cannonVisual = PrefabUtility.InstantiatePrefab(cannonModel) as GameObject;
+            if (cannonVisual == null)
             {
                 Debug.LogError($"Cannon model cannot be instantiated as GameObject: {CannonModelPath}");
                 return null;
             }
 
-            cannon.name = "StartCannon";
-            cannon.transform.SetParent(parent, false);
-            cannon.transform.position = new Vector3(0f, 0.14f, -6.2f);
-            cannon.transform.rotation = Quaternion.Euler(0f, 0f, 0f);
+            cannonVisual.name = "CannonVisual";
+            cannonVisual.transform.SetParent(cannonRoot.transform, false);
+            cannonVisual.transform.localPosition = Vector3.zero;
+            cannonVisual.transform.localRotation = Quaternion.identity;
 
-            NormalizeHeight(cannon, cannon.transform, 1.28f);
-            GroundObject(cannon);
-            AssignMaterial(cannon, cannonMaterial);
-            return cannon;
+            NormalizeHeight(cannonRoot, cannonVisual.transform, 1.28f);
+            GroundObject(cannonRoot);
+            AssignMaterial(cannonRoot, cannonMaterial);
+
+            GameObject muzzle = new GameObject("Muzzle");
+            muzzle.transform.SetParent(cannonRoot.transform, false);
+            muzzle.transform.localPosition = new Vector3(0f, 0f, 1.05f);
+
+            GameObject hole = new GameObject("Hole");
+            hole.transform.SetParent(cannonRoot.transform, false);
+            hole.transform.localPosition = new Vector3(0f, 0.12f, 1.8f);
+
+            return cannonRoot;
         }
 
         private static UnitRunnerManager CreateRunnerManager()
@@ -555,18 +589,39 @@ namespace MobControlPrototype.Editor
                 cannon.transform.position = new Vector3(0f, 0.14f, -6.2f);
             }
 
-            GameObject muzzle = new GameObject("Muzzle");
-            muzzle.transform.SetParent(cannon.transform, false);
-            muzzle.transform.localPosition = new Vector3(0f, 0f, 1.05f);
+            Transform muzzle = FindChildRecursive(cannon.transform, "Muzzle");
+            if (muzzle == null)
+            {
+                GameObject muzzleObject = new GameObject("Muzzle");
+                muzzleObject.transform.SetParent(cannon.transform, false);
+                muzzleObject.transform.localPosition = new Vector3(0f, 0f, 1.05f);
+                muzzle = muzzleObject.transform;
+            }
+
+            Transform hole = FindChildRecursive(cannon.transform, "Hole");
+            if (hole == null)
+            {
+                GameObject holeObject = new GameObject("Hole");
+                holeObject.transform.SetParent(cannon.transform, false);
+                holeObject.transform.localPosition = new Vector3(0f, 0.12f, 1.8f);
+                hole = holeObject.transform;
+            }
+
+            Transform recoilRoot = FindChildRecursive(cannon.transform, "CannonVisual");
+            if (recoilRoot == null)
+            {
+                recoilRoot = cannon.transform;
+            }
 
             CannonShooter shooter = cannon.AddComponent<CannonShooter>();
             SerializedObject serializedShooter = new SerializedObject(shooter);
-            serializedShooter.FindProperty("muzzle").objectReferenceValue = muzzle.transform;
+            serializedShooter.FindProperty("spawnPoint").objectReferenceValue = hole;
+            serializedShooter.FindProperty("muzzle").objectReferenceValue = muzzle;
             serializedShooter.FindProperty("runnerManager").objectReferenceValue = runnerManager;
-            serializedShooter.FindProperty("recoilRoot").objectReferenceValue = cannon.transform;
+            serializedShooter.FindProperty("recoilRoot").objectReferenceValue = recoilRoot;
             serializedShooter.FindProperty("horizontalSpeed").floatValue = 5f;
-            serializedShooter.FindProperty("minX").floatValue = -2.7f;
-            serializedShooter.FindProperty("maxX").floatValue = 2.7f;
+            serializedShooter.FindProperty("minX").floatValue = -5.6f;
+            serializedShooter.FindProperty("maxX").floatValue = 5.6f;
             serializedShooter.FindProperty("followMouseWithoutClick").boolValue = true;
             serializedShooter.FindProperty("mouseFollowSharpness").floatValue = 16f;
             serializedShooter.FindProperty("shotsPerSecond").floatValue = 4f;
@@ -574,6 +629,31 @@ namespace MobControlPrototype.Editor
             serializedShooter.FindProperty("runnerSpawnOffset").vector3Value = new Vector3(0f, 0.12f, 0.75f);
             serializedShooter.ApplyModifiedPropertiesWithoutUndo();
             return shooter;
+        }
+
+        private static Transform FindChildRecursive(Transform root, string childName)
+        {
+            if (root == null)
+            {
+                return null;
+            }
+
+            for (int i = 0; i < root.childCount; i++)
+            {
+                Transform child = root.GetChild(i);
+                if (child.name == childName)
+                {
+                    return child;
+                }
+
+                Transform nested = FindChildRecursive(child, childName);
+                if (nested != null)
+                {
+                    return nested;
+                }
+            }
+
+            return null;
         }
 
         private static void CreateHud(UnitRunnerManager runnerManager, FinishTarget finishTarget)
@@ -659,22 +739,21 @@ namespace MobControlPrototype.Editor
 
         private static void EnsureMainCameraExists()
         {
-            if (Object.FindObjectOfType<UnityEngine.Camera>() != null)
+            UnityEngine.Camera camera = Object.FindObjectOfType<UnityEngine.Camera>();
+            if (camera != null)
             {
                 return;
             }
 
             GameObject cameraObject = new GameObject("Main Camera");
             cameraObject.tag = "MainCamera";
-            cameraObject.transform.SetPositionAndRotation(new Vector3(0f, 7.8f, -12.2f), Quaternion.Euler(57f, 0f, 0f));
-
-            UnityEngine.Camera camera = cameraObject.AddComponent<UnityEngine.Camera>();
+            camera = cameraObject.AddComponent<UnityEngine.Camera>();
+            cameraObject.transform.SetPositionAndRotation(new Vector3(0f, 9.4f, -14.8f), Quaternion.Euler(54f, 0f, 0f));
             camera.clearFlags = CameraClearFlags.SolidColor;
             camera.backgroundColor = new Color(0.62f, 0.78f, 0.92f);
-            camera.fieldOfView = 54f;
+            camera.fieldOfView = 58f;
             camera.nearClipPlane = 0.1f;
             camera.farClipPlane = 120f;
-
             cameraObject.AddComponent<AudioListener>();
         }
 
@@ -731,6 +810,38 @@ namespace MobControlPrototype.Editor
             for (int i = 0; i < renderers.Length; i++)
             {
                 renderers[i].sharedMaterial = material;
+            }
+        }
+
+        private static void CreateGateLabel(Transform parent, GateOperation operation, int value, float zOffset)
+        {
+            GameObject label = new GameObject("BackLabel");
+            label.transform.SetParent(parent, false);
+            label.transform.localPosition = new Vector3(0f, 0.04f, zOffset);
+            label.transform.localRotation = Quaternion.identity;
+
+            TextMesh textMesh = label.AddComponent<TextMesh>();
+            textMesh.text = FormatGateLabel(operation, value);
+            textMesh.anchor = TextAnchor.MiddleCenter;
+            textMesh.alignment = TextAlignment.Center;
+            textMesh.characterSize = 0.16f;
+            textMesh.fontSize = 30;
+            textMesh.color = Color.white;
+            textMesh.fontStyle = FontStyle.Bold;
+        }
+
+        private static string FormatGateLabel(GateOperation operation, int value)
+        {
+            switch (operation)
+            {
+                case GateOperation.Add:
+                    return $"+{value}";
+                case GateOperation.Multiply:
+                    return $"x{value}";
+                case GateOperation.Subtract:
+                    return $"-{value}";
+                default:
+                    return value.ToString();
             }
         }
 

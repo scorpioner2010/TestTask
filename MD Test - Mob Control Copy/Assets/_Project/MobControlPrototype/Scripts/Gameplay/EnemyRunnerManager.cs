@@ -7,6 +7,9 @@ namespace MobControlPrototype.Gameplay
     [DisallowMultipleComponent]
     public sealed class EnemyRunnerManager : MonoBehaviour
     {
+        private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+        private static readonly int ColorId = Shader.PropertyToID("_Color");
+
         [Header("References")]
         [SerializeField] private UnitRunnerManager runnerManager;
         [SerializeField] private CannonShooter cannonShooter;
@@ -163,13 +166,13 @@ namespace MobControlPrototype.Gameplay
             instance.transform.SetParent(transform, true);
             instance.transform.SetPositionAndRotation(spawnPosition, Quaternion.LookRotation(direction, Vector3.up));
             instance.name = $"EnemyRunner_{++_spawnedCount:000}";
+            ApplyEnemyTint(instance);
             instance.SetActive(true);
 
             EnemyMob enemy = EnsureEnemyComponents(instance);
             enemy.Initialize(this);
             enemy.ActiveIndex = _activeEnemies.Count;
             _activeEnemies.Add(enemy);
-            ApplyEnemyTint(instance);
         }
 
         private GameObject GetFromPool()
@@ -179,7 +182,9 @@ namespace MobControlPrototype.Gameplay
                 return _pool.Pop();
             }
 
-            return Instantiate(enemyPrefab, transform, false);
+            GameObject instance = Instantiate(enemyPrefab, _poolRoot, false);
+            instance.SetActive(false);
+            return instance;
         }
 
         private void BeginEnemyRemoval(EnemyMob enemy, bool playSinkAnimation)
@@ -302,18 +307,43 @@ namespace MobControlPrototype.Gameplay
             }
 
             Renderer[] renderers = enemyObject.GetComponentsInChildren<Renderer>(true);
-            for (int i = 0; i < renderers.Length; i++)
+            for (int rendererIndex = 0; rendererIndex < renderers.Length; rendererIndex++)
             {
-                Renderer renderer = renderers[i];
+                Renderer renderer = renderers[rendererIndex];
                 if (renderer == null)
                 {
                     continue;
                 }
 
-                renderer.GetPropertyBlock(_propertyBlock);
-                _propertyBlock.SetColor("_Color", enemyTint);
-                renderer.SetPropertyBlock(_propertyBlock);
+                Material[] materials = renderer.sharedMaterials;
+                for (int materialIndex = 0; materialIndex < materials.Length; materialIndex++)
+                {
+                    int colorPropertyId = GetColorPropertyId(materials[materialIndex]);
+                    if (colorPropertyId == -1)
+                    {
+                        continue;
+                    }
+
+                    renderer.GetPropertyBlock(_propertyBlock, materialIndex);
+                    _propertyBlock.SetColor(colorPropertyId, enemyTint);
+                    renderer.SetPropertyBlock(_propertyBlock, materialIndex);
+                }
             }
+        }
+
+        private static int GetColorPropertyId(Material material)
+        {
+            if (material == null)
+            {
+                return -1;
+            }
+
+            if (material.HasProperty(BaseColorId))
+            {
+                return BaseColorId;
+            }
+
+            return material.HasProperty(ColorId) ? ColorId : -1;
         }
 
         private void CleanupLegacySceneEnemies()

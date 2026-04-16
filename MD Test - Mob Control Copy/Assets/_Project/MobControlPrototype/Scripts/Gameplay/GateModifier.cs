@@ -10,7 +10,12 @@ namespace MobControlPrototype.Gameplay
         [SerializeField, Min(1)] private int value = 10;
         [SerializeField, Min(0.05f)] private float pulseDuration = 0.14f;
         [SerializeField, Range(1f, 1.5f)] private float pulseScaleMultiplier = 1.08f;
+        [SerializeField] private bool moveHorizontally = true;
+        [SerializeField, Min(0f)] private float horizontalTravelDistance = 2.8f;
+        [SerializeField, Min(0.2f)] private float horizontalCycleDuration = 2.4f;
+        [SerializeField] private float horizontalPhaseOffset;
 
+        private Vector3 _baseLocalPosition;
         private Vector3 _baseScale;
         private Coroutine _pulseRoutine;
 
@@ -19,6 +24,7 @@ namespace MobControlPrototype.Gameplay
 
         private void Awake()
         {
+            _baseLocalPosition = transform.localPosition;
             _baseScale = transform.localScale;
             Collider trigger = GetComponent<Collider>();
             trigger.isTrigger = true;
@@ -31,6 +37,12 @@ namespace MobControlPrototype.Gameplay
                 _baseScale = transform.localScale;
             }
 
+            if (_baseLocalPosition == Vector3.zero)
+            {
+                _baseLocalPosition = transform.localPosition;
+            }
+
+            ApplyHorizontalMotion(true);
             transform.localScale = _baseScale;
         }
 
@@ -39,11 +51,18 @@ namespace MobControlPrototype.Gameplay
             value = Mathf.Max(1, value);
             pulseDuration = Mathf.Max(0.05f, pulseDuration);
             pulseScaleMultiplier = Mathf.Max(1f, pulseScaleMultiplier);
+            horizontalTravelDistance = Mathf.Max(0f, horizontalTravelDistance);
+            horizontalCycleDuration = Mathf.Max(0.2f, horizontalCycleDuration);
             Collider trigger = GetComponent<Collider>();
             if (trigger != null)
             {
                 trigger.isTrigger = true;
             }
+        }
+
+        private void Update()
+        {
+            ApplyHorizontalMotion(false);
         }
 
         public bool TryApply(UnitRunner runner)
@@ -117,6 +136,21 @@ namespace MobControlPrototype.Gameplay
 
             transform.localScale = _baseScale;
             _pulseRoutine = null;
+        }
+
+        private void ApplyHorizontalMotion(bool instant)
+        {
+            if (!moveHorizontally)
+            {
+                transform.localPosition = _baseLocalPosition;
+                return;
+            }
+
+            float cycleDuration = Mathf.Max(0.2f, horizontalCycleDuration);
+            float angularFrequency = Mathf.PI * 2f / cycleDuration;
+            float time = instant ? 0f : Time.time;
+            float xOffset = Mathf.Sin((time + horizontalPhaseOffset) * angularFrequency) * horizontalTravelDistance;
+            transform.localPosition = _baseLocalPosition + Vector3.right * xOffset;
         }
     }
 }
