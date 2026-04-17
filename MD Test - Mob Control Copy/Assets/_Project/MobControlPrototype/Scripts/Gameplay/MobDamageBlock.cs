@@ -8,6 +8,10 @@ namespace MobControlPrototype.Gameplay
     [DisallowMultipleComponent]
     public sealed class MobDamageBlock : MonoBehaviour
     {
+        private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+        private static readonly int ColorId = Shader.PropertyToID("_Color");
+        private const float PulseScaleBoost = 2.25f;
+
         [SerializeField, Min(1)] private int health = 30;
         [SerializeField, Min(1)] private int damagePerUnit = 1;
         [SerializeField] private Renderer[] feedbackRenderers;
@@ -15,7 +19,8 @@ namespace MobControlPrototype.Gameplay
 
         [Header("Feedback")]
         [SerializeField, Min(0.05f)] private float hitPulseDuration = 0.12f;
-        [SerializeField, Range(1f, 1.3f)] private float hitPulseScaleMultiplier = 1.06f;
+        [SerializeField, Range(1f, 1.3f)] private float hitPulseScaleMultiplier = 1.08f;
+        [SerializeField] private Color hitFlashColor = new Color(1f, 0.78f, 0.42f, 1f);
         [SerializeField, Min(0.05f)] private float destroyDuration = 0.18f;
         [SerializeField, Min(0f)] private float sinkDistance = 0.5f;
         [SerializeField] private Color destroyedTint = new Color(0.28f, 0.28f, 0.28f, 1f);
@@ -160,9 +165,15 @@ namespace MobControlPrototype.Gameplay
 
         private IEnumerator HitPulseRoutine()
         {
-            Vector3 pulseScale = _baseLocalScale * hitPulseScaleMultiplier;
+            Vector3 pulseScale = _baseLocalScale * GetBoostedScaleMultiplier(hitPulseScaleMultiplier);
             float halfDuration = hitPulseDuration * 0.5f;
             float elapsed = 0f;
+
+            ApplyRendererTint(hitFlashColor, clearTint: false);
+            if (healthLabel != null)
+            {
+                healthLabel.color = hitFlashColor;
+            }
 
             while (elapsed < halfDuration)
             {
@@ -182,7 +193,18 @@ namespace MobControlPrototype.Gameplay
             }
 
             transform.localScale = _baseLocalScale;
+            ApplyRendererTint(Color.white, clearTint: true);
+            if (healthLabel != null)
+            {
+                healthLabel.color = _baseLabelColor;
+            }
+
             _feedbackRoutine = null;
+        }
+
+        private static float GetBoostedScaleMultiplier(float scaleMultiplier)
+        {
+            return 1f + (Mathf.Max(1f, scaleMultiplier) - 1f) * PulseScaleBoost;
         }
 
         private void DestroyBlock()
@@ -264,8 +286,8 @@ namespace MobControlPrototype.Gameplay
                 }
                 else
                 {
-                    _propertyBlock.SetColor("_Color", color);
-                    _propertyBlock.SetColor("_BaseColor", color);
+                    _propertyBlock.SetColor(ColorId, color);
+                    _propertyBlock.SetColor(BaseColorId, color);
                 }
 
                 renderer.SetPropertyBlock(_propertyBlock);

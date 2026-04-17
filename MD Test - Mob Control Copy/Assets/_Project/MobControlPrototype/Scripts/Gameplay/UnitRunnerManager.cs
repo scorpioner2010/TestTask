@@ -73,7 +73,14 @@ namespace MobControlPrototype.Gameplay
 
         private void FixedUpdate()
         {
-            if (_levelEnded || ActiveCount == 0)
+            if (_levelEnded)
+            {
+                return;
+            }
+
+            _tubeTraversalRegistry.Tick(Time.fixedDeltaTime);
+
+            if (ActiveCount == 0)
             {
                 return;
             }
@@ -391,6 +398,9 @@ namespace MobControlPrototype.Gameplay
         private const string ExitDirectionName = "ExitDirection";
         private const float DefaultEntryRadius = 1f;
         private const float EntryProjectionWindow = 0.16f;
+        private const float EntrancePulseDuration = 0.16f;
+        private const float EntrancePulseScaleMultiplier = 1.08f;
+        private const float EntrancePulseScaleBoost = 2.25f;
 
         private readonly List<TubePath> _paths = new List<TubePath>(4);
 
@@ -408,6 +418,14 @@ namespace MobControlPrototype.Gameplay
                 {
                     _paths.RemoveAt(i);
                 }
+            }
+        }
+
+        public void Tick(float deltaTime)
+        {
+            for (int i = 0; i < _paths.Count; i++)
+            {
+                _paths[i].TickFeedback(deltaTime);
             }
         }
 
@@ -455,13 +473,19 @@ namespace MobControlPrototype.Gameplay
                 4);
 
             double startPercent = Mathf.Clamp01((float)projectedSample.percent);
-            return runner.BeginTubeTraversal(
+            bool started = runner.BeginTubeTraversal(
                 bestPath.Spline,
                 startPercent,
                 moveSpeed,
                 bestPath.ExitPosition,
                 bestPath.ExitRotation,
                 bestPath.ExitDirection);
+            if (started)
+            {
+                bestPath.PlayEntrancePulse();
+            }
+
+            return started;
         }
 
         private void RegisterTaggedEndpoints(
@@ -529,6 +553,9 @@ namespace MobControlPrototype.Gameplay
             private Transform _exitMarker;
             private Transform _exitDirectionMarker;
             private float _entryRadius = DefaultEntryRadius;
+            private Transform _entranceAnchor;
+            private Vector3 _entranceBaseScale = Vector3.one;
+            private float _entrancePulseElapsed = -1f;
 
             public TubePath(SplineComputer spline)
             {
@@ -564,7 +591,12 @@ namespace MobControlPrototype.Gameplay
             public void SetEntrance(Transform entranceMarker)
             {
                 _entranceMarker = entranceMarker;
-                _entryRadius = ResolveEntryRadius(GetEndpointAnchor(entranceMarker));
+                _entranceAnchor = GetEndpointAnchor(entranceMarker);
+                _entryRadius = ResolveEntryRadius(_entranceAnchor);
+                if (_entranceAnchor != null)
+                {
+                    _entranceBaseScale = _entranceAnchor.localScale;
+                }
             }
 
             public void SetExit(Transform exitMarker)
@@ -579,7 +611,7 @@ namespace MobControlPrototype.Gameplay
                 out Vector3 capturePoint,
                 out float distanceSqr)
             {
-                Transform entranceAnchor = GetEndpointAnchor(_entranceMarker);
+                Transform entranceAnchor = _entranceAnchor != null ? _entranceAnchor : GetEndpointAnchor(_entranceMarker);
                 if (entranceAnchor == null)
                 {
                     capturePoint = Vector3.zero;
@@ -594,6 +626,51 @@ namespace MobControlPrototype.Gameplay
                 Vector2 entranceXZ = new Vector2(entranceAnchor.position.x, entranceAnchor.position.z);
                 distanceSqr = (captureXZ - entranceXZ).sqrMagnitude;
                 return distanceSqr <= _entryRadius * _entryRadius;
+            }
+
+            public void PlayEntrancePulse()
+            {
+                if (_entranceAnchor == null)
+                {
+                    return;
+                }
+
+                _entrancePulseElapsed = 0f;
+            }
+
+            public void TickFeedback(float deltaTime)
+            {
+                if (_entranceAnchor == null)
+                {
+                    return;
+                }
+
+                if (_entrancePulseElapsed < 0f)
+                {
+                    if (_entranceAnchor.localScale != _entranceBaseScale)
+                    {
+                        _entranceAnchor.localScale = _entranceBaseScale;
+                    }
+
+                    return;
+                }
+
+                _entrancePulseElapsed += deltaTime;
+                float t = Mathf.Clamp01(_entrancePulseElapsed / EntrancePulseDuration);
+                float pulse = Mathf.Sin(t * Mathf.PI);
+                Vector3 pulseScale = _entranceBaseScale * GetBoostedScaleMultiplier(EntrancePulseScaleMultiplier);
+                _entranceAnchor.localScale = Vector3.LerpUnclamped(_entranceBaseScale, pulseScale, pulse);
+
+                if (t >= 1f)
+                {
+                    _entranceAnchor.localScale = _entranceBaseScale;
+                    _entrancePulseElapsed = -1f;
+                }
+            }
+
+            private static float GetBoostedScaleMultiplier(float scaleMultiplier)
+            {
+                return 1f + (Mathf.Max(1f, scaleMultiplier) - 1f) * EntrancePulseScaleBoost;
             }
 
             private static Transform GetEndpointAnchor(Transform marker)
