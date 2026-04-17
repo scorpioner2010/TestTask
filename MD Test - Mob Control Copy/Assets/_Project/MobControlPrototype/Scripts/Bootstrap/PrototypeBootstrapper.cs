@@ -11,15 +11,16 @@ namespace MobControlPrototype.Bootstrap
     {
         [SerializeField] private UnitRunnerManager runnerManager;
         [SerializeField] private CannonShooter cannonShooter;
+        [SerializeField] private EnemyRunnerManager enemyRunnerManager;
+        [SerializeField] private PlayerCannonHitZone cannonHitZone;
+        [SerializeField] private FinishTarget finishTarget;
+        [SerializeField] private PrototypeGameplayVfxService gameplayVfxService;
         [SerializeField] private GameObject unitPrefab;
         [SerializeField] private GameObject unitModelPrefab;
         [SerializeField] private AnimationClip runningClip;
         [SerializeField] private Material fallbackUnitMaterial;
         [SerializeField, Min(0f)] private float forwardSpeed = 5.4f;
         [SerializeField, Min(0f)] private float runningAnimationSpeed = 1.12f;
-
-        [Header("VFX")]
-        [SerializeField] private PrototypeGameplayVfxSettings gameplayVfxSettings = new PrototypeGameplayVfxSettings();
 
         private void Awake()
         {
@@ -48,73 +49,26 @@ namespace MobControlPrototype.Bootstrap
                 ServiceLocator.Register(cannonShooter);
             }
 
-            if (gameplayVfxSettings == null)
-            {
-                gameplayVfxSettings = new PrototypeGameplayVfxSettings();
-            }
-
-            PrototypeGameplayVfxService gameplayVfxService =
-                PrototypeGameplayVfxService.Create(gameplayVfxSettings, transform);
             if (gameplayVfxService != null)
             {
                 ServiceLocator.Register(gameplayVfxService);
             }
 
-            SetupEnemyLoop();
-        }
+            if (enemyRunnerManager != null && runnerManager != null && finishTarget != null && unitPrefab != null)
+            {
+                enemyRunnerManager.Configure(runnerManager, finishTarget, unitPrefab);
+                ServiceLocator.Register(enemyRunnerManager);
+            }
 
-        private void OnValidate()
-        {
-            gameplayVfxSettings ??= new PrototypeGameplayVfxSettings();
-            gameplayVfxSettings.OnValidate();
+            if (cannonHitZone != null && runnerManager != null)
+            {
+                cannonHitZone.Configure(runnerManager);
+            }
         }
 
         private void OnDestroy()
         {
             ServiceLocator.Clear();
-        }
-
-        private void SetupEnemyLoop()
-        {
-            if (runnerManager == null || unitPrefab == null)
-            {
-                return;
-            }
-
-            FinishTarget finishTarget = FindObjectOfType<FinishTarget>();
-            if (finishTarget == null)
-            {
-                return;
-            }
-
-            EnemyRunnerManager enemyManager = FindObjectOfType<EnemyRunnerManager>();
-            if (enemyManager == null)
-            {
-                GameObject managerObject = new GameObject("EnemyRunnerManager");
-                enemyManager = managerObject.AddComponent<EnemyRunnerManager>();
-            }
-
-            enemyManager.Configure(runnerManager, finishTarget, unitPrefab);
-            ServiceLocator.Register(enemyManager);
-
-            PlayerCannonHitZone cannonHitZone = FindObjectOfType<PlayerCannonHitZone>();
-            if (cannonHitZone == null)
-            {
-                if (cannonShooter == null)
-                {
-                    return;
-                }
-
-                GameObject loseZoneObject = new GameObject("PlayerLoseZone");
-                loseZoneObject.transform.SetPositionAndRotation(
-                    cannonShooter.transform.position + new Vector3(0f, 0.9f, 2.8f),
-                    Quaternion.identity);
-                BoxCollider loseZoneCollider = loseZoneObject.AddComponent<BoxCollider>();
-                loseZoneCollider.size = new Vector3(13.6f, 2.4f, 0.8f);
-                cannonHitZone = loseZoneObject.AddComponent<PlayerCannonHitZone>();
-            }
-
-            cannonHitZone.Configure(runnerManager);
         }
     }
 }

@@ -27,13 +27,13 @@ namespace MobControlPrototype.Gameplay
         [SerializeField, Min(0.05f)] private float cloneSpreadDuration = 0.24f;
         [SerializeField, Min(0f)] private float cloneSpreadArcHeight = 0.34f;
         [SerializeField, Range(0.1f, 1f)] private float cloneStartScaleMultiplier = 0.78f;
+        [SerializeField] private Transform poolRoot;
 
         private readonly List<UnitRunner> _activeRunners = new List<UnitRunner>(160);
         private readonly Stack<GameObject> _pool = new Stack<GameObject>(160);
         private readonly TubeTraversalRegistry _tubeTraversalRegistry = new TubeTraversalRegistry();
         private IUnitFactory _unitFactory;
         private IMovementStrategy _movementStrategy;
-        private Transform _poolRoot;
         private int _nextRunnerId;
         private bool _levelEnded;
 
@@ -206,7 +206,7 @@ namespace MobControlPrototype.Gameplay
             if (runner == null)
             {
                 instance.SetActive(false);
-                instance.transform.SetParent(_poolRoot, false);
+                instance.transform.SetParent(poolRoot, false);
                 return null;
             }
 
@@ -267,7 +267,7 @@ namespace MobControlPrototype.Gameplay
             runner.Deactivate();
             GameObject runnerObject = runner.gameObject;
             runnerObject.SetActive(false);
-            runnerObject.transform.SetParent(_poolRoot, false);
+            runnerObject.transform.SetParent(poolRoot, false);
             runnerObject.transform.localPosition = Vector3.zero;
             _pool.Push(runnerObject);
         }
@@ -313,15 +313,24 @@ namespace MobControlPrototype.Gameplay
 
         private void EnsurePoolRoot()
         {
-            if (_poolRoot != null)
+            if (poolRoot != null)
             {
+                poolRoot.gameObject.SetActive(false);
+                return;
+            }
+
+            Transform existingPool = transform.Find("InactiveRunnerPool");
+            if (existingPool != null)
+            {
+                poolRoot = existingPool;
+                poolRoot.gameObject.SetActive(false);
                 return;
             }
 
             GameObject poolObject = new GameObject("InactiveRunnerPool");
             poolObject.transform.SetParent(transform, false);
             poolObject.SetActive(false);
-            _poolRoot = poolObject.transform;
+            poolRoot = poolObject.transform;
         }
 
         private static float GetCenteredOffset(int index, int total)

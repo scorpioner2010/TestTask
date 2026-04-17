@@ -6,7 +6,6 @@ using UnityEngine;
 
 namespace MobControlPrototype.Gameplay
 {
-    [RequireComponent(typeof(Collider))]
     [DisallowMultipleComponent]
     public sealed class FinishTarget : MonoBehaviour
     {
@@ -17,6 +16,9 @@ namespace MobControlPrototype.Gameplay
 
         [SerializeField, Min(1)] private int health = 20;
         [SerializeField, Min(1)] private int damagePerUnit = 1;
+        [SerializeField] private Transform presentationRoot;
+        [SerializeField] private Collider triggerCollider;
+        [SerializeField] private PrototypeGameplayVfxService gameplayVfxService;
         [SerializeField] private Renderer[] feedbackRenderers;
         [SerializeField] private Transform[] enemySpawnPoints;
 
@@ -28,12 +30,10 @@ namespace MobControlPrototype.Gameplay
 
         private int _currentHealth;
         private bool _destroyed;
-        private Collider _trigger;
         private Coroutine _feedbackRoutine;
         private Transform[] _pulseTargets = Array.Empty<Transform>();
         private Vector3[] _basePulseTargetScales = Array.Empty<Vector3>();
         private MaterialPropertyBlock _propertyBlock;
-        private PrototypeGameplayVfxService _vfxService;
 
         public event Action<int, int> HealthChanged;
 
@@ -42,24 +42,18 @@ namespace MobControlPrototype.Gameplay
 
         private void Awake()
         {
-            _trigger = GetComponent<Collider>();
+            EnsureTrigger();
             RefreshPulseTargets();
             _currentHealth = Mathf.Max(1, health);
-            _trigger.isTrigger = true;
             NotifyHealthChanged();
         }
 
         private void OnEnable()
         {
-            if (_trigger == null)
+            EnsureTrigger();
+            if (triggerCollider != null)
             {
-                _trigger = GetComponent<Collider>();
-            }
-
-            if (_trigger != null)
-            {
-                _trigger.isTrigger = true;
-                _trigger.enabled = true;
+                triggerCollider.enabled = true;
             }
 
             if (_pulseTargets == null || _pulseTargets.Length == 0)
@@ -89,6 +83,7 @@ namespace MobControlPrototype.Gameplay
             damagePerUnit = Mathf.Max(1, damagePerUnit);
             hitPulseDuration = Mathf.Max(0.05f, hitPulseDuration);
             hitPulseScaleMultiplier = Mathf.Max(1f, hitPulseScaleMultiplier);
+            EnsureTrigger();
             if (!Application.isPlaying)
             {
                 _currentHealth = health;
@@ -130,7 +125,8 @@ namespace MobControlPrototype.Gameplay
             int validSpawnPointCount = GetValidSpawnPointCount();
             if (validSpawnPointCount <= 0)
             {
-                return transform.position;
+                Transform root = ResolvePresentationRoot();
+                return root != null ? root.position : transform.position;
             }
 
             int targetIndex = UnityEngine.Random.Range(0, validSpawnPointCount);
@@ -150,7 +146,8 @@ namespace MobControlPrototype.Gameplay
                 targetIndex--;
             }
 
-            return transform.position;
+            Transform presentation = ResolvePresentationRoot();
+            return presentation != null ? presentation.position : transform.position;
         }
 
         private void ApplyResultFeedback(bool success)
@@ -256,12 +253,13 @@ namespace MobControlPrototype.Gameplay
 
         private void PlayDamageVfx(Vector3 attackerPosition)
         {
-            if (_vfxService == null)
+            if (gameplayVfxService == null)
             {
-                ServiceLocator.TryGet(out _vfxService);
+                ServiceLocator.TryGet(out gameplayVfxService);
             }
 
-            _vfxService?.PlayCastleDamage(transform, _trigger, attackerPosition);
+            Transform targetRoot = ResolvePresentationRoot();
+            gameplayVfxService?.PlayCastleDamage(targetRoot != null ? targetRoot : transform, triggerCollider, attackerPosition);
         }
 
         private void ApplyPulseScaleMultiplier(float scaleMultiplier)
@@ -301,8 +299,9 @@ namespace MobControlPrototype.Gameplay
 
         private Transform ResolvePulseTarget()
         {
-            Transform pulseTarget = FindChildRecursive(transform, PulseTargetName);
-            return pulseTarget != null ? pulseTarget : transform;
+            Transform root = ResolvePresentationRoot();
+            Transform pulseTarget = FindChildRecursive(root != null ? root : transform, PulseTargetName);
+            return pulseTarget != null ? pulseTarget : (root != null ? root : transform);
         }
 
         private void RefreshPulseTargets()
@@ -399,6 +398,30 @@ namespace MobControlPrototype.Gameplay
             }
 
             return validCount;
+        }
+
+        private Transform ResolvePresentationRoot()
+        {
+            if (presentationRoot == null)
+            {
+                presentationRoot = transform.childCount > 0 ? transform.GetChild(0) : transform;
+            }
+
+            return presentationRoot;
+        }
+
+        private void EnsureTrigger()
+        {
+            if (triggerCollider == null)
+            {
+                triggerCollider = GetComponent<Collider>();
+                triggerCollider ??= GetComponentInChildren<Collider>(true);
+            }
+
+            if (triggerCollider != null)
+            {
+                triggerCollider.isTrigger = true;
+            }
         }
     }
 }

@@ -3,10 +3,15 @@ using UnityEngine;
 
 namespace MobControlPrototype.Gameplay
 {
-    [RequireComponent(typeof(Collider))]
     [DisallowMultipleComponent]
     public sealed class GateModifier : MonoBehaviour
     {
+        [Header("References")]
+        [SerializeField] private Transform animatedRoot;
+        [SerializeField] private Collider triggerCollider;
+        [SerializeField] private PrototypeGameplayVfxService gameplayVfxService;
+
+        [Header("Gate")]
         [SerializeField] private GateOperation operation = GateOperation.Add;
         [SerializeField, Min(1)] private int value = 10;
         [SerializeField, Min(0.05f)] private float pulseDuration = 0.14f;
@@ -19,33 +24,27 @@ namespace MobControlPrototype.Gameplay
         private Vector3 _baseLocalPosition;
         private Vector3 _baseScale;
         private Coroutine _pulseRoutine;
-        private PrototypeGameplayVfxService _vfxService;
+        private bool _hasCachedBaseTransform;
 
         public GateOperation Operation => operation;
         public int Value => value;
 
         private void Awake()
         {
-            _baseLocalPosition = transform.localPosition;
-            _baseScale = transform.localScale;
-            Collider trigger = GetComponent<Collider>();
-            trigger.isTrigger = true;
+            CacheBaseTransform(force: true);
+            EnsureTrigger();
         }
 
         private void OnEnable()
         {
-            if (_baseScale == Vector3.zero)
-            {
-                _baseScale = transform.localScale;
-            }
-
-            if (_baseLocalPosition == Vector3.zero)
-            {
-                _baseLocalPosition = transform.localPosition;
-            }
+            CacheBaseTransform(force: false);
 
             ApplyHorizontalMotion(true);
-            transform.localScale = _baseScale;
+            Transform root = ResolveAnimatedRoot();
+            if (root != null)
+            {
+                root.localScale = _baseScale;
+            }
         }
 
         private void OnValidate()
@@ -55,10 +54,11 @@ namespace MobControlPrototype.Gameplay
             pulseScaleMultiplier = Mathf.Max(1f, pulseScaleMultiplier);
             horizontalTravelDistance = Mathf.Max(0f, horizontalTravelDistance);
             horizontalCycleDuration = Mathf.Max(0.2f, horizontalCycleDuration);
-            Collider trigger = GetComponent<Collider>();
-            if (trigger != null)
+            EnsureTrigger();
+
+            if (!Application.isPlaying)
             {
-                trigger.isTrigger = true;
+                CacheBaseTransform(force: true);
             }
         }
 
@@ -82,8 +82,9 @@ namespace MobControlPrototype.Gameplay
 
             runner.MarkGatePassed(gateId);
 
-            Collider trigger = GetComponent<Collider>();
-            float spawnZ = transform.position.z + 1.2f;
+            Collider trigger = ResolveTriggerCollider();
+            Transform root = ResolveAnimatedRoot();
+            float spawnZ = (root != null ? root.position.z : transform.position.z) + 1.2f;
             if (trigger != null)
             {
                 spawnZ = trigger.bounds.max.z + 0.8f;
@@ -94,12 +95,12 @@ namespace MobControlPrototype.Gameplay
             if (applied)
             {
                 PlayPulse();
-                if (_vfxService == null)
+                if (gameplayVfxService == null)
                 {
-                    ServiceLocator.TryGet(out _vfxService);
+                    ServiceLocator.TryGet(out gameplayVfxService);
                 }
 
-                _vfxService?.PlayGateActivation(operation, transform, trigger);
+                gameplayVfxService?.PlayGateActivation(operation, root != null ? root : transform, trigger);
             }
 
             return applied;
@@ -122,6 +123,13 @@ namespace MobControlPrototype.Gameplay
 
         private System.Collections.IEnumerator PulseRoutine()
         {
+            Transform root = ResolveAnimatedRoot();
+            if (root == null)
+            {
+                _pulseRoutine = null;
+                yield break;
+            }
+
             Vector3 pulseScale = _baseScale * pulseScaleMultiplier;
             float halfDuration = pulseDuration * 0.5f;
             float elapsed = 0f;
@@ -130,7 +138,7 @@ namespace MobControlPrototype.Gameplay
             {
                 elapsed += Time.deltaTime;
                 float t = Mathf.Clamp01(elapsed / halfDuration);
-                transform.localScale = Vector3.LerpUnclamped(_baseScale, pulseScale, t);
+                root.localScale = Vector3.LerpUnclamped(_baseScale, pulseScale, t);
                 yield return null;
             }
 
@@ -139,19 +147,25 @@ namespace MobControlPrototype.Gameplay
             {
                 elapsed += Time.deltaTime;
                 float t = Mathf.Clamp01(elapsed / halfDuration);
-                transform.localScale = Vector3.LerpUnclamped(pulseScale, _baseScale, t);
+                root.localScale = Vector3.LerpUnclamped(pulseScale, _baseScale, t);
                 yield return null;
             }
 
-            transform.localScale = _baseScale;
+            root.localScale = _baseScale;
             _pulseRoutine = null;
         }
 
         private void ApplyHorizontalMotion(bool instant)
         {
+            Transform root = ResolveAnimatedRoot();
+            if (root == null)
+            {
+                return;
+            }
+
             if (!moveHorizontally)
             {
-                transform.localPosition = _baseLocalPosition;
+                root.localPosition = _baseLocalPosition;
                 return;
             }
 
@@ -159,7 +173,55 @@ namespace MobControlPrototype.Gameplay
             float angularFrequency = Mathf.PI * 2f / cycleDuration;
             float time = instant ? 0f : Time.time;
             float xOffset = Mathf.Sin((time + horizontalPhaseOffset) * angularFrequency) * horizontalTravelDistance;
-            transform.localPosition = _baseLocalPosition + Vector3.right * xOffset;
+            root.localPosition = _baseLocalPosition + Vector3.right * xOffset;
+        }
+
+        private Transform ResolveAnimatedRoot()
+        {
+            if (animatedRoot == null)
+            {
+                animatedRoot = transform.childCount > 0 ? transform.GetChild(0) : transform;
+            }
+
+            return animatedRoot;
+        }
+
+        private Collider ResolveTriggerCollider()
+        {
+            if (triggerCollider == null)
+            {
+                triggerCollider = GetComponent<Collider>();
+                triggerCollider ??= GetComponentInChildren<Collider>(true);
+            }
+
+            return triggerCollider;
+        }
+
+        private void EnsureTrigger()
+        {
+            Collider trigger = ResolveTriggerCollider();
+            if (trigger != null)
+            {
+                trigger.isTrigger = true;
+            }
+        }
+
+        private void CacheBaseTransform(bool force)
+        {
+            if (_hasCachedBaseTransform && !force)
+            {
+                return;
+            }
+
+            Transform root = ResolveAnimatedRoot();
+            if (root == null)
+            {
+                return;
+            }
+
+            _baseLocalPosition = root.localPosition;
+            _baseScale = root.localScale;
+            _hasCachedBaseTransform = true;
         }
     }
 }

@@ -5,7 +5,6 @@ using UnityEngine;
 
 namespace MobControlPrototype.Gameplay
 {
-    [RequireComponent(typeof(Collider))]
     [DisallowMultipleComponent]
     public sealed class MobDamageBlock : MonoBehaviour
     {
@@ -13,6 +12,12 @@ namespace MobControlPrototype.Gameplay
         private static readonly int ColorId = Shader.PropertyToID("_Color");
         private const float PulseScaleBoost = 2.25f;
 
+        [Header("References")]
+        [SerializeField] private Transform presentationRoot;
+        [SerializeField] private Collider triggerCollider;
+        [SerializeField] private PrototypeGameplayVfxService gameplayVfxService;
+
+        [Header("Health")]
         [SerializeField, Min(1)] private int health = 30;
         [SerializeField, Min(1)] private int damagePerUnit = 1;
         [SerializeField] private Renderer[] feedbackRenderers;
@@ -28,13 +33,12 @@ namespace MobControlPrototype.Gameplay
 
         private int _currentHealth;
         private bool _destroyed;
-        private Collider _trigger;
         private Coroutine _feedbackRoutine;
         private Vector3 _baseLocalScale = Vector3.one;
         private Vector3 _baseLocalPosition;
         private Color _baseLabelColor = Color.white;
         private MaterialPropertyBlock _propertyBlock;
-        private PrototypeGameplayVfxService _vfxService;
+        private bool _hasCachedBaseTransform;
 
         public event Action<int, int> HealthChanged;
 
@@ -43,10 +47,8 @@ namespace MobControlPrototype.Gameplay
 
         private void Awake()
         {
-            _trigger = GetComponent<Collider>();
-            _trigger.isTrigger = true;
-            _baseLocalScale = transform.localScale;
-            _baseLocalPosition = transform.localPosition;
+            EnsureTrigger();
+            CachePresentationState(force: true);
             if (healthLabel != null)
             {
                 _baseLabelColor = healthLabel.color;
@@ -59,19 +61,20 @@ namespace MobControlPrototype.Gameplay
 
         private void OnEnable()
         {
-            if (_trigger == null)
+            EnsureTrigger();
+
+            if (triggerCollider != null)
             {
-                _trigger = GetComponent<Collider>();
+                triggerCollider.enabled = true;
             }
 
-            if (_trigger != null)
+            Transform root = ResolvePresentationRoot();
+            if (root != null)
             {
-                _trigger.isTrigger = true;
-                _trigger.enabled = true;
+                root.localScale = _baseLocalScale;
+                root.localPosition = _baseLocalPosition;
             }
 
-            transform.localScale = _baseLocalScale;
-            transform.localPosition = _baseLocalPosition;
             ApplyRendererTint(Color.white, clearTint: true);
             if (healthLabel != null)
             {
@@ -98,15 +101,11 @@ namespace MobControlPrototype.Gameplay
             hitPulseScaleMultiplier = Mathf.Max(1f, hitPulseScaleMultiplier);
             destroyDuration = Mathf.Max(0.05f, destroyDuration);
             sinkDistance = Mathf.Max(0f, sinkDistance);
-
-            Collider trigger = GetComponent<Collider>();
-            if (trigger != null)
-            {
-                trigger.isTrigger = true;
-            }
+            EnsureTrigger();
 
             if (!Application.isPlaying)
             {
+                CachePresentationState(force: true);
                 _currentHealth = health;
                 UpdateHealthLabel();
             }
@@ -140,8 +139,13 @@ namespace MobControlPrototype.Gameplay
         private void ApplyRuntimeState()
         {
             _destroyed = false;
-            transform.localScale = _baseLocalScale;
-            transform.localPosition = _baseLocalPosition;
+            Transform root = ResolvePresentationRoot();
+            if (root != null)
+            {
+                root.localScale = _baseLocalScale;
+                root.localPosition = _baseLocalPosition;
+            }
+
             ApplyRendererTint(Color.white, clearTint: true);
 
             if (healthLabel != null)
@@ -169,6 +173,13 @@ namespace MobControlPrototype.Gameplay
 
         private IEnumerator HitPulseRoutine()
         {
+            Transform root = ResolvePresentationRoot();
+            if (root == null)
+            {
+                _feedbackRoutine = null;
+                yield break;
+            }
+
             Vector3 pulseScale = _baseLocalScale * GetBoostedScaleMultiplier(hitPulseScaleMultiplier);
             float halfDuration = hitPulseDuration * 0.5f;
             float elapsed = 0f;
@@ -183,7 +194,7 @@ namespace MobControlPrototype.Gameplay
             {
                 elapsed += Time.deltaTime;
                 float t = Mathf.Clamp01(elapsed / halfDuration);
-                transform.localScale = Vector3.LerpUnclamped(_baseLocalScale, pulseScale, t);
+                root.localScale = Vector3.LerpUnclamped(_baseLocalScale, pulseScale, t);
                 yield return null;
             }
 
@@ -192,11 +203,11 @@ namespace MobControlPrototype.Gameplay
             {
                 elapsed += Time.deltaTime;
                 float t = Mathf.Clamp01(elapsed / halfDuration);
-                transform.localScale = Vector3.LerpUnclamped(pulseScale, _baseLocalScale, t);
+                root.localScale = Vector3.LerpUnclamped(pulseScale, _baseLocalScale, t);
                 yield return null;
             }
 
-            transform.localScale = _baseLocalScale;
+            root.localScale = _baseLocalScale;
             ApplyRendererTint(Color.white, clearTint: true);
             if (healthLabel != null)
             {
@@ -208,12 +219,13 @@ namespace MobControlPrototype.Gameplay
 
         private void PlayDamageVfx(Vector3 attackerPosition)
         {
-            if (_vfxService == null)
+            if (gameplayVfxService == null)
             {
-                ServiceLocator.TryGet(out _vfxService);
+                ServiceLocator.TryGet(out gameplayVfxService);
             }
 
-            _vfxService?.PlayWallDamage(transform, _trigger, attackerPosition);
+            Transform targetRoot = ResolvePresentationRoot();
+            gameplayVfxService?.PlayWallDamage(targetRoot != null ? targetRoot : transform, triggerCollider, attackerPosition);
         }
 
         private static float GetBoostedScaleMultiplier(float scaleMultiplier)
@@ -225,9 +237,9 @@ namespace MobControlPrototype.Gameplay
         {
             _destroyed = true;
 
-            if (_trigger != null)
+            if (triggerCollider != null)
             {
-                _trigger.enabled = false;
+                triggerCollider.enabled = false;
             }
 
             if (healthLabel != null)
@@ -253,12 +265,20 @@ namespace MobControlPrototype.Gameplay
 
         private IEnumerator DestroyRoutine()
         {
-            Vector3 startScale = transform.localScale;
+            Transform root = ResolvePresentationRoot();
+            if (root == null)
+            {
+                _feedbackRoutine = null;
+                gameObject.SetActive(false);
+                yield break;
+            }
+
+            Vector3 startScale = root.localScale;
             Vector3 endScale = new Vector3(
                 _baseLocalScale.x,
                 Mathf.Max(0.01f, _baseLocalScale.y * 0.08f),
                 _baseLocalScale.z);
-            Vector3 startPosition = transform.localPosition;
+            Vector3 startPosition = root.localPosition;
             Vector3 endPosition = _baseLocalPosition + Vector3.down * sinkDistance;
             float elapsed = 0f;
 
@@ -267,8 +287,8 @@ namespace MobControlPrototype.Gameplay
                 elapsed += Time.deltaTime;
                 float t = Mathf.Clamp01(elapsed / destroyDuration);
                 float eased = t * t * (3f - 2f * t);
-                transform.localScale = Vector3.LerpUnclamped(startScale, endScale, eased);
-                transform.localPosition = Vector3.LerpUnclamped(startPosition, endPosition, eased);
+                root.localScale = Vector3.LerpUnclamped(startScale, endScale, eased);
+                root.localPosition = Vector3.LerpUnclamped(startPosition, endPosition, eased);
                 yield return null;
             }
 
@@ -320,6 +340,48 @@ namespace MobControlPrototype.Gameplay
         {
             UpdateHealthLabel();
             HealthChanged?.Invoke(_currentHealth, health);
+        }
+
+        private Transform ResolvePresentationRoot()
+        {
+            if (presentationRoot == null)
+            {
+                presentationRoot = transform.childCount > 0 ? transform.GetChild(0) : transform;
+            }
+
+            return presentationRoot;
+        }
+
+        private void EnsureTrigger()
+        {
+            if (triggerCollider == null)
+            {
+                triggerCollider = GetComponent<Collider>();
+                triggerCollider ??= GetComponentInChildren<Collider>(true);
+            }
+
+            if (triggerCollider != null)
+            {
+                triggerCollider.isTrigger = true;
+            }
+        }
+
+        private void CachePresentationState(bool force)
+        {
+            if (_hasCachedBaseTransform && !force)
+            {
+                return;
+            }
+
+            Transform root = ResolvePresentationRoot();
+            if (root == null)
+            {
+                return;
+            }
+
+            _baseLocalScale = root.localScale;
+            _baseLocalPosition = root.localPosition;
+            _hasCachedBaseTransform = true;
         }
     }
 }

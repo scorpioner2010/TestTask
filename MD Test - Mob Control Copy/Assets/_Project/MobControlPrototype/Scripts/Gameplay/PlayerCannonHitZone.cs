@@ -1,15 +1,12 @@
-using MobControlPrototype.Infrastructure;
 using UnityEngine;
 
 namespace MobControlPrototype.Gameplay
 {
-    [RequireComponent(typeof(BoxCollider))]
     [DisallowMultipleComponent]
     public sealed class PlayerCannonHitZone : MonoBehaviour
     {
         [SerializeField] private UnitRunnerManager runnerManager;
-
-        private BoxCollider _trigger;
+        [SerializeField] private BoxCollider triggerCollider;
 
         public void Configure(UnitRunnerManager manager)
         {
@@ -19,11 +16,11 @@ namespace MobControlPrototype.Gameplay
 
         private void Awake()
         {
-            if (runnerManager == null)
-            {
-                ServiceLocator.TryGet(out runnerManager);
-            }
+            EnsureTrigger();
+        }
 
+        private void OnValidate()
+        {
             EnsureTrigger();
         }
 
@@ -45,16 +42,16 @@ namespace MobControlPrototype.Gameplay
 
         private void EnsureTrigger()
         {
-            if (_trigger == null)
+            if (triggerCollider == null)
             {
-                _trigger = GetComponent<BoxCollider>();
-                if (_trigger == null)
-                {
-                    _trigger = gameObject.AddComponent<BoxCollider>();
-                }
+                triggerCollider = GetComponent<BoxCollider>();
+                triggerCollider ??= GetComponentInChildren<BoxCollider>(true);
             }
 
-            _trigger.isTrigger = true;
+            if (triggerCollider != null)
+            {
+                triggerCollider.isTrigger = true;
+            }
         }
     }
 }

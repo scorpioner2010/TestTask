@@ -1,4 +1,3 @@
-using MobControlPrototype.Infrastructure;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -13,9 +12,8 @@ namespace MobControlPrototype.Gameplay
         [SerializeField] private Text castleLabel;
         [SerializeField] private Text stateLabel;
 
-        private void Start()
+        private void OnEnable()
         {
-            ResolveReferences();
             Subscribe();
             RefreshUnits(runnerManager != null ? runnerManager.ActiveCount : 0);
 
@@ -25,22 +23,9 @@ namespace MobControlPrototype.Gameplay
             }
         }
 
-        private void OnDestroy()
+        private void OnDisable()
         {
             Unsubscribe();
-        }
-
-        private void ResolveReferences()
-        {
-            if (runnerManager == null)
-            {
-                ServiceLocator.TryGet(out runnerManager);
-            }
-
-            if (finishTarget == null)
-            {
-                finishTarget = FindObjectOfType<FinishTarget>();
-            }
         }
 
         private void Subscribe()

@@ -9,87 +9,59 @@ namespace MobControlPrototype.Gameplay
     {
         private const float DefaultCameraDepthBias = 0.12f;
 
+        [SerializeField] private PrototypeGameplayVfxSettings settings = new PrototypeGameplayVfxSettings();
+        [SerializeField] private Camera mainCamera;
+
         private readonly Dictionary<GameObject, Queue<PrototypeGameplayVfxInstance>> _poolByPrefab =
             new Dictionary<GameObject, Queue<PrototypeGameplayVfxInstance>>(8);
 
-        private PrototypeGameplayVfxSettings _settings;
-        private Camera _mainCamera;
-
-        public static PrototypeGameplayVfxService Create(PrototypeGameplayVfxSettings settings, Transform parent)
+        public void Configure(PrototypeGameplayVfxSettings newSettings, Camera camera = null)
         {
-            if (settings == null)
+            if (newSettings != null)
             {
-                return null;
+                settings = newSettings;
             }
 
-            PrototypeGameplayVfxService existing = FindObjectOfType<PrototypeGameplayVfxService>();
-            if (existing != null)
+            if (camera != null)
             {
-                existing.Configure(settings);
-                if (parent != null && existing.transform.parent == null)
-                {
-                    existing.transform.SetParent(parent, false);
-                }
-
-                return existing;
-            }
-
-            GameObject serviceObject = new GameObject("PrototypeGameplayVfxService");
-            if (parent != null)
-            {
-                serviceObject.transform.SetParent(parent, false);
-            }
-
-            PrototypeGameplayVfxService service = serviceObject.AddComponent<PrototypeGameplayVfxService>();
-            service.Configure(settings);
-            return service;
-        }
-
-        public void Configure(PrototypeGameplayVfxSettings settings)
-        {
-            _settings = settings;
-            if (_mainCamera == null)
-            {
-                _mainCamera = Camera.main;
+                mainCamera = camera;
             }
         }
 
-        private void LateUpdate()
+        private void OnValidate()
         {
-            if (_mainCamera == null || !_mainCamera.isActiveAndEnabled)
-            {
-                _mainCamera = Camera.main;
-            }
+            settings ??= new PrototypeGameplayVfxSettings();
+            settings.OnValidate();
         }
 
         public void PlayShot(Vector3 worldPosition, Vector3 shotDirection)
         {
-            if (_settings == null)
+            if (settings == null)
             {
                 return;
             }
 
-            PlayEffect(_settings.Shot, worldPosition, CreateDirectionalRotation(shotDirection, Vector3.forward), shotDirection);
+            PlayEffect(settings.Shot, worldPosition, CreateDirectionalRotation(shotDirection, Vector3.forward), shotDirection);
         }
 
         public void PlayUnitCollision(Vector3 playerPosition, Vector3 enemyPosition, Vector3 fallbackForward)
         {
-            if (_settings == null)
+            if (settings == null)
             {
                 return;
             }
 
             Vector3 collisionPosition = Vector3.LerpUnclamped(playerPosition, enemyPosition, 0.5f);
             PlayEffect(
-                _settings.UnitCollision,
+                settings.UnitCollision,
                 collisionPosition,
-                CreateEffectRotation(_settings.UnitCollision, fallbackForward, collisionPosition),
+                CreateEffectRotation(settings.UnitCollision, fallbackForward, collisionPosition),
                 fallbackForward);
         }
 
         public void PlayGateActivation(GateOperation operation, Transform gateTransform, Collider gateCollider)
         {
-            if (_settings == null)
+            if (settings == null)
             {
                 return;
             }
@@ -98,10 +70,10 @@ namespace MobControlPrototype.Gameplay
             switch (operation)
             {
                 case GateOperation.Add:
-                    effectEntry = _settings.GateAdd;
+                    effectEntry = settings.GateAdd;
                     break;
                 case GateOperation.Multiply:
-                    effectEntry = _settings.GateMultiply;
+                    effectEntry = settings.GateMultiply;
                     break;
                 default:
                     return;
@@ -118,12 +90,12 @@ namespace MobControlPrototype.Gameplay
 
         public void PlayWallDamage(Transform targetTransform, Collider targetCollider, Vector3 attackerPosition)
         {
-            PlayStructureDamage(_settings != null ? _settings.WallDamage : default, targetTransform, targetCollider, attackerPosition);
+            PlayStructureDamage(settings != null ? settings.WallDamage : default, targetTransform, targetCollider, attackerPosition);
         }
 
         public void PlayCastleDamage(Transform targetTransform, Collider targetCollider, Vector3 attackerPosition)
         {
-            PlayStructureDamage(_settings != null ? _settings.CastleDamage : default, targetTransform, targetCollider, attackerPosition);
+            PlayStructureDamage(settings != null ? settings.CastleDamage : default, targetTransform, targetCollider, attackerPosition);
         }
 
         internal void ReturnToPool(PrototypeGameplayVfxInstance instance)
@@ -157,7 +129,7 @@ namespace MobControlPrototype.Gameplay
             Collider targetCollider,
             Vector3 attackerPosition)
         {
-            if (_settings == null)
+            if (settings == null)
             {
                 return;
             }
@@ -269,7 +241,8 @@ namespace MobControlPrototype.Gameplay
                 return CreateDirectionalRotation(toCamera, fallbackForward);
             }
 
-            Vector3 up = _mainCamera != null ? _mainCamera.transform.up : Vector3.up;
+            Camera camera = ResolveCamera();
+            Vector3 up = camera != null ? camera.transform.up : Vector3.up;
             if (toCamera.sqrMagnitude < 0.0001f)
             {
                 toCamera = fallbackForward.sqrMagnitude > 0.0001f ? fallbackForward.normalized : Vector3.back;
@@ -293,13 +266,9 @@ namespace MobControlPrototype.Gameplay
 
         private Vector3 GetDirectionToCamera(Vector3 worldPosition, bool keepUpright, Vector3 fallbackForward)
         {
-            if (_mainCamera == null || !_mainCamera.isActiveAndEnabled)
-            {
-                _mainCamera = Camera.main;
-            }
-
-            Vector3 direction = _mainCamera != null
-                ? _mainCamera.transform.position - worldPosition
+            Camera camera = ResolveCamera();
+            Vector3 direction = camera != null
+                ? camera.transform.position - worldPosition
                 : (fallbackForward.sqrMagnitude > 0.0001f ? -fallbackForward : Vector3.back);
             if (keepUpright)
             {
@@ -316,6 +285,16 @@ namespace MobControlPrototype.Gameplay
             }
 
             return direction.sqrMagnitude > 0.0001f ? direction.normalized : Vector3.back;
+        }
+
+        private Camera ResolveCamera()
+        {
+            if (mainCamera == null || !mainCamera.isActiveAndEnabled)
+            {
+                mainCamera = Camera.main;
+            }
+
+            return mainCamera;
         }
     }
 

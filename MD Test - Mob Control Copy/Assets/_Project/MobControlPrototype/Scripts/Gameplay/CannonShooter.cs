@@ -11,6 +11,8 @@ namespace MobControlPrototype.Gameplay
         [SerializeField] private Transform muzzle;
         [SerializeField] private UnitRunnerManager runnerManager;
         [SerializeField] private Transform recoilRoot;
+        [SerializeField] private Camera inputCamera;
+        [SerializeField] private PrototypeGameplayVfxService gameplayVfxService;
 
         [Header("Movement")]
         [SerializeField, Min(0f)] private float horizontalSpeed = 5f;
@@ -29,8 +31,6 @@ namespace MobControlPrototype.Gameplay
         [SerializeField] private Vector3 compressedScaleMultiplier = new Vector3(1.05f, 0.9f, 0.84f);
         [SerializeField] private Vector3 stretchedScaleMultiplier = new Vector3(0.96f, 1.04f, 1.12f);
 
-        private UnityEngine.Camera _camera;
-        private PrototypeGameplayVfxService _vfxService;
         private float _shotTimer;
         private float _recoilTimer;
         private bool _isRecoiling;
@@ -72,13 +72,6 @@ namespace MobControlPrototype.Gameplay
             }
 
             EnsureResolvedReferences();
-
-            if (runnerManager == null)
-            {
-                ServiceLocator.TryGet(out runnerManager);
-            }
-
-            _camera = UnityEngine.Camera.main;
         }
 
         private void EnsureResolvedReferences()
@@ -88,9 +81,14 @@ namespace MobControlPrototype.Gameplay
                 ServiceLocator.TryGet(out runnerManager);
             }
 
-            if (_vfxService == null)
+            if (gameplayVfxService == null)
             {
-                ServiceLocator.TryGet(out _vfxService);
+                ServiceLocator.TryGet(out gameplayVfxService);
+            }
+
+            if (inputCamera == null)
+            {
+                inputCamera = UnityEngine.Camera.main;
             }
 
             if (spawnPoint == null)
@@ -156,12 +154,12 @@ namespace MobControlPrototype.Gameplay
 
         private void MoveTowardMouse(float deltaTime)
         {
-            if (_camera == null)
+            if (inputCamera == null)
             {
                 return;
             }
 
-            Ray ray = _camera.ScreenPointToRay(Input.mousePosition);
+            Ray ray = inputCamera.ScreenPointToRay(Input.mousePosition);
             Plane groundPlane = new Plane(Vector3.up, Vector3.zero);
             if (!groundPlane.Raycast(ray, out float distance))
             {
@@ -212,7 +210,7 @@ namespace MobControlPrototype.Gameplay
                 Vector3 effectForward = spawnPoint != null
                     ? spawnPoint.forward
                     : (muzzle != null ? muzzle.forward : Vector3.forward);
-                _vfxService?.PlayShot(effectPosition, effectForward);
+                gameplayVfxService?.PlayShot(effectPosition, effectForward);
                 TriggerShotFeedback();
             }
         }

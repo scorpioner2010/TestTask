@@ -14,6 +14,7 @@ namespace MobControlPrototype.Gameplay
         [SerializeField] private UnitRunnerManager runnerManager;
         [SerializeField] private FinishTarget finishTarget;
         [SerializeField] private GameObject enemyPrefab;
+        [SerializeField] private Transform poolRoot;
 
         [Header("Spawning")]
         [SerializeField, Min(0.1f)] private float spawnRate = 0f;
@@ -31,11 +32,9 @@ namespace MobControlPrototype.Gameplay
 
         private readonly List<EnemyMob> _activeEnemies = new List<EnemyMob>(48);
         private readonly Stack<GameObject> _pool = new Stack<GameObject>(48);
-        private Transform _poolRoot;
         private MaterialPropertyBlock _propertyBlock;
         private float _spawnTimer;
         private int _spawnedCount;
-        private bool _cleanedLegacyEnemies;
 
         public void Configure(
             UnitRunnerManager unitRunnerManager,
@@ -63,8 +62,6 @@ namespace MobControlPrototype.Gameplay
             {
                 finishTarget = FindObjectOfType<FinishTarget>();
             }
-
-            CleanupLegacySceneEnemies();
         }
 
         private void FixedUpdate()
@@ -159,7 +156,7 @@ namespace MobControlPrototype.Gameplay
                 return _pool.Pop();
             }
 
-            GameObject instance = Instantiate(enemyPrefab, _poolRoot, false);
+            GameObject instance = Instantiate(enemyPrefab, poolRoot, false);
             instance.SetActive(false);
             return instance;
         }
@@ -202,7 +199,7 @@ namespace MobControlPrototype.Gameplay
             enemy.Deactivate();
             GameObject enemyObject = enemy.gameObject;
             enemyObject.SetActive(false);
-            enemyObject.transform.SetParent(_poolRoot, false);
+            enemyObject.transform.SetParent(poolRoot, false);
             enemyObject.transform.localPosition = Vector3.zero;
             _pool.Push(enemyObject);
         }
@@ -221,15 +218,24 @@ namespace MobControlPrototype.Gameplay
 
         private void EnsurePoolRoot()
         {
-            if (_poolRoot != null)
+            if (poolRoot != null)
             {
+                poolRoot.gameObject.SetActive(false);
+                return;
+            }
+
+            Transform existingPool = transform.Find("InactiveEnemyPool");
+            if (existingPool != null)
+            {
+                poolRoot = existingPool;
+                poolRoot.gameObject.SetActive(false);
                 return;
             }
 
             GameObject poolObject = new GameObject("InactiveEnemyPool");
             poolObject.transform.SetParent(transform, false);
             poolObject.SetActive(false);
-            _poolRoot = poolObject.transform;
+            poolRoot = poolObject.transform;
         }
 
         private Vector3 GetSpawnPosition()
@@ -287,43 +293,6 @@ namespace MobControlPrototype.Gameplay
             }
 
             return material.HasProperty(ColorId) ? ColorId : -1;
-        }
-
-        private void CleanupLegacySceneEnemies()
-        {
-            if (_cleanedLegacyEnemies)
-            {
-                return;
-            }
-
-            _cleanedLegacyEnemies = true;
-
-            EnemyMob[] legacyEnemies = FindObjectsOfType<EnemyMob>(true);
-            for (int i = 0; i < legacyEnemies.Length; i++)
-            {
-                EnemyMob enemy = legacyEnemies[i];
-                if (enemy == null || enemy.Manager == this)
-                {
-                    continue;
-                }
-
-                Destroy(enemy.gameObject);
-            }
-
-            Transform[] transforms = FindObjectsOfType<Transform>(true);
-            for (int i = 0; i < transforms.Length; i++)
-            {
-                Transform candidate = transforms[i];
-                if (candidate == null || !candidate.gameObject.scene.IsValid())
-                {
-                    continue;
-                }
-
-                if (candidate.name.StartsWith("EnemyGroup_"))
-                {
-                    Destroy(candidate.gameObject);
-                }
-            }
         }
     }
 }
