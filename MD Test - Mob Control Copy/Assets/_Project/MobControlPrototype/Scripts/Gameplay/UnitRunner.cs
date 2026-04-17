@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Dreamteck.Splines;
 using UnityEngine;
 
 namespace MobControlPrototype.Gameplay
@@ -9,6 +10,10 @@ namespace MobControlPrototype.Gameplay
     [DisallowMultipleComponent]
     public sealed class UnitRunner : MonoBehaviour
     {
+        private const float TubeEntrySpeedFactor = 0.35f;
+        private const float MinTubeEntryDuration = 0.12f;
+        private const float MaxTubeEntryDuration = 0.30f;
+
         private readonly HashSet<int> _passedGateIds = new HashSet<int>();
         private UnitRunnerManager _manager;
         private Rigidbody _body;
@@ -24,12 +29,31 @@ namespace MobControlPrototype.Gameplay
         private float _spawnStartScaleMultiplier = 1f;
         private Vector3 _spawnStartPosition;
         private Vector3 _spawnTargetPosition;
+        private bool _isInTube;
+        private SplineComputer _tubeSpline;
+        private double _tubePercent;
+        private float _tubeSpeed;
+        private bool _isTubeEntering;
+        private float _tubeEntryElapsed;
+        private float _tubeEntryDuration;
+        private Vector3 _tubeEntryStartPosition;
+        private Vector3 _tubeEntryTargetPosition;
+        private Quaternion _tubeEntryStartRotation = Quaternion.identity;
+        private Quaternion _tubeEntryTargetRotation = Quaternion.identity;
+        private Vector3 _tubeExitPosition;
+        private Quaternion _tubeExitRotation = Quaternion.identity;
+        private Vector3 _tubeExitDirection = Vector3.forward;
+        private bool _hasMovementDirectionOverride;
+        private Vector3 _movementDirectionOverride = Vector3.forward;
 
         public int ActiveIndex { get; set; }
         public bool IsActive { get; private set; }
+        public bool IsInTube => _isInTube;
+        public bool HasMovementDirectionOverride => _hasMovementDirectionOverride;
         public UnitRunnerManager Manager => _manager;
         public Rigidbody Body => _body;
         public Vector3 WorldPosition => _body != null ? _body.position : transform.position;
+        public Vector3 MovementDirection => _movementDirectionOverride;
 
         private void Awake()
         {
@@ -87,6 +111,8 @@ namespace MobControlPrototype.Gameplay
             _passedGateIds.Clear();
             _isSpawnAnimating = false;
             _spawnElapsed = 0f;
+            ResetTubeTraversal();
+            ClearMovementDirectionOverride();
             SetCollisionState(false);
             ResetVisualScale();
         }
@@ -128,6 +154,67 @@ namespace MobControlPrototype.Gameplay
             }
         }
 
+        public bool BeginTubeTraversal(
+            SplineComputer spline,
+            double startPercent,
+            float speed,
+            Vector3 exitPosition,
+            Quaternion exitRotation,
+            Vector3 exitDirection)
+        {
+            if (!IsActive || spline == null || _isInTube)
+            {
+                return false;
+            }
+
+            _isInTube = true;
+            _tubeSpline = spline;
+            _tubePercent = Mathf.Clamp01((float)startPercent);
+            _tubeSpeed = Mathf.Max(0.1f, speed);
+            _tubeExitPosition = exitPosition;
+            _tubeExitRotation = exitRotation;
+            _tubeExitDirection = NormalizeMovementDirection(exitDirection, exitRotation * Vector3.forward);
+            _isSpawnAnimating = false;
+            _spawnElapsed = 0f;
+            _isTubeEntering = true;
+            _tubeEntryElapsed = 0f;
+
+            SetCollisionState(false);
+            SplineSample entrySample = _tubeSpline.Evaluate(_tubePercent);
+            _tubeEntryStartPosition = WorldPosition;
+            _tubeEntryTargetPosition = entrySample.position;
+            _tubeEntryStartRotation = _body != null ? _body.rotation : transform.rotation;
+            _tubeEntryTargetRotation = CreateTubeRotation(entrySample.forward);
+
+            float approachSpeed = Mathf.Max(0.25f, _tubeSpeed * TubeEntrySpeedFactor);
+            float entryDistance = Vector3.Distance(_tubeEntryStartPosition, _tubeEntryTargetPosition);
+            _tubeEntryDuration = Mathf.Clamp(
+                entryDistance / approachSpeed,
+                MinTubeEntryDuration,
+                MaxTubeEntryDuration);
+            return true;
+        }
+
+        public void SetMovementDirectionOverride(Vector3 worldDirection)
+        {
+            Vector3 normalizedDirection = NormalizeMovementDirection(worldDirection, Vector3.forward);
+            _movementDirectionOverride = normalizedDirection;
+            _hasMovementDirectionOverride = true;
+
+            if (!IsActive || _isInTube)
+            {
+                return;
+            }
+
+            SetWorldRotation(Quaternion.LookRotation(normalizedDirection, Vector3.up));
+        }
+
+        public void ClearMovementDirectionOverride()
+        {
+            _hasMovementDirectionOverride = false;
+            _movementDirectionOverride = Vector3.forward;
+        }
+
         public bool TickSpawnAnimation(float deltaTime)
         {
             if (!_isSpawnAnimating)
@@ -161,6 +248,52 @@ namespace MobControlPrototype.Gameplay
             SetWorldPosition(_spawnTargetPosition);
             ResetVisualScale();
             SetCollisionState(true);
+
+            return true;
+        }
+
+        public bool TickTubeTraversal(float deltaTime)
+        {
+            if (!_isInTube || _tubeSpline == null)
+            {
+                return false;
+            }
+
+            if (_isTubeEntering)
+            {
+                _tubeEntryElapsed += deltaTime;
+                float t = _tubeEntryDuration > 0f
+                    ? Mathf.Clamp01(_tubeEntryElapsed / _tubeEntryDuration)
+                    : 1f;
+                float eased = t * t * (3f - 2f * t);
+
+                Vector3 position = Vector3.LerpUnclamped(_tubeEntryStartPosition, _tubeEntryTargetPosition, eased);
+                Quaternion rotation = Quaternion.SlerpUnclamped(
+                    _tubeEntryStartRotation,
+                    _tubeEntryTargetRotation,
+                    eased);
+                SetWorldPose(position, rotation);
+
+                if (t < 1f)
+                {
+                    return true;
+                }
+
+                _isTubeEntering = false;
+                ApplyTubePose(_tubePercent);
+                return true;
+            }
+
+            float travelDistance = Mathf.Max(0f, _tubeSpeed) * deltaTime;
+            float moved;
+            _tubePercent = _tubeSpline.Travel(_tubePercent, travelDistance, out moved, Spline.Direction.Forward);
+            ApplyTubePose(_tubePercent);
+
+            bool reachedEnd = _tubePercent >= 0.9999 || moved + 0.0001f < travelDistance;
+            if (reachedEnd)
+            {
+                EndTubeTraversal();
+            }
 
             return true;
         }
@@ -211,6 +344,23 @@ namespace MobControlPrototype.Gameplay
             transform.position = position;
         }
 
+        private void SetWorldRotation(Quaternion rotation)
+        {
+            if (_body != null)
+            {
+                _body.rotation = rotation;
+                return;
+            }
+
+            transform.rotation = rotation;
+        }
+
+        private void SetWorldPose(Vector3 position, Quaternion rotation)
+        {
+            SetWorldPosition(position);
+            SetWorldRotation(rotation);
+        }
+
         private void EnsureRuntimeComponents()
         {
             if (_trigger == null)
@@ -250,6 +400,8 @@ namespace MobControlPrototype.Gameplay
         {
             _isSpawnAnimating = false;
             _spawnElapsed = 0f;
+            ResetTubeTraversal();
+            ClearMovementDirectionOverride();
             SetCollisionState(true);
             _sinkFeedback?.ResetImmediate();
             ResetVisualScale();
@@ -305,6 +457,66 @@ namespace MobControlPrototype.Gameplay
             {
                 _visualRoot.localScale = _baseVisualScale;
             }
+        }
+
+        private void ApplyTubePose(double percent)
+        {
+            if (_tubeSpline == null)
+            {
+                return;
+            }
+
+            SplineSample sample = _tubeSpline.Evaluate(percent);
+            SetWorldPose(sample.position, CreateTubeRotation(sample.forward));
+        }
+
+        private void EndTubeTraversal()
+        {
+            SetWorldPose(_tubeExitPosition, _tubeExitRotation);
+            SetMovementDirectionOverride(_tubeExitDirection);
+            ResetTubeTraversal();
+            SetCollisionState(true);
+        }
+
+        private void ResetTubeTraversal()
+        {
+            _isInTube = false;
+            _tubeSpline = null;
+            _tubePercent = 0.0;
+            _tubeSpeed = 0f;
+            _isTubeEntering = false;
+            _tubeEntryElapsed = 0f;
+            _tubeEntryDuration = 0f;
+            _tubeEntryStartPosition = Vector3.zero;
+            _tubeEntryTargetPosition = Vector3.zero;
+            _tubeEntryStartRotation = Quaternion.identity;
+            _tubeEntryTargetRotation = Quaternion.identity;
+            _tubeExitPosition = Vector3.zero;
+            _tubeExitRotation = Quaternion.identity;
+            _tubeExitDirection = Vector3.forward;
+        }
+
+        private static Quaternion CreateTubeRotation(Vector3 preferredForward)
+        {
+            Vector3 horizontalForward = NormalizeMovementDirection(preferredForward, Vector3.forward);
+            return Quaternion.LookRotation(horizontalForward.normalized, Vector3.up);
+        }
+
+        private static Vector3 NormalizeMovementDirection(Vector3 candidate, Vector3 fallback)
+        {
+            Vector3 horizontal = new Vector3(candidate.x, 0f, candidate.z);
+            if (horizontal.sqrMagnitude > 0.0001f)
+            {
+                return horizontal.normalized;
+            }
+
+            Vector3 horizontalFallback = new Vector3(fallback.x, 0f, fallback.z);
+            if (horizontalFallback.sqrMagnitude > 0.0001f)
+            {
+                return horizontalFallback.normalized;
+            }
+
+            return Vector3.forward;
         }
     }
 }
