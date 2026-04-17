@@ -55,7 +55,7 @@ namespace MobControlPrototype.Bootstrap
 
         private void SetupEnemyLoop()
         {
-            if (runnerManager == null || cannonShooter == null || unitPrefab == null)
+            if (runnerManager == null || unitPrefab == null)
             {
                 return;
             }
@@ -73,13 +73,24 @@ namespace MobControlPrototype.Bootstrap
                 enemyManager = managerObject.AddComponent<EnemyRunnerManager>();
             }
 
-            enemyManager.Configure(runnerManager, cannonShooter, finishTarget, unitPrefab);
+            enemyManager.Configure(runnerManager, finishTarget, unitPrefab);
             ServiceLocator.Register(enemyManager);
 
-            PlayerCannonHitZone cannonHitZone = cannonShooter.GetComponent<PlayerCannonHitZone>();
+            PlayerCannonHitZone cannonHitZone = FindObjectOfType<PlayerCannonHitZone>();
             if (cannonHitZone == null)
             {
-                cannonHitZone = cannonShooter.gameObject.AddComponent<PlayerCannonHitZone>();
+                if (cannonShooter == null)
+                {
+                    return;
+                }
+
+                GameObject loseZoneObject = new GameObject("PlayerLoseZone");
+                loseZoneObject.transform.SetPositionAndRotation(
+                    cannonShooter.transform.position + new Vector3(0f, 0.9f, 2.8f),
+                    Quaternion.identity);
+                BoxCollider loseZoneCollider = loseZoneObject.AddComponent<BoxCollider>();
+                loseZoneCollider.size = new Vector3(13.6f, 2.4f, 0.8f);
+                cannonHitZone = loseZoneObject.AddComponent<PlayerCannonHitZone>();
             }
 
             cannonHitZone.Configure(runnerManager);

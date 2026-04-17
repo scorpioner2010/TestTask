@@ -186,6 +186,13 @@ namespace MobControlPrototype.Gameplay
                 return;
             }
 
+            MobDamageBlock damageBlock = other.GetComponentInParent<MobDamageBlock>();
+            if (damageBlock != null)
+            {
+                damageBlock.TryDamage(this);
+                return;
+            }
+
             FinishTarget finishTarget = other.GetComponentInParent<FinishTarget>();
             if (finishTarget != null)
             {

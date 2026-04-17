@@ -17,7 +17,10 @@ namespace MobControlPrototype.Editor
         private const string UnitPrefabPath = ProjectRoot + "/Prefabs/RunnerUnit.prefab";
         private const string RunnerModelPath = "Assets/Models/LowPoly_Stickaman_Running.fbx";
         private const string CannonModelPath = "Assets/Models/Cannon.fbx";
-        private const string AutoBuildVersion = "stage05-wide-road-moving-gates-v4";
+        private const string AutoBuildVersion = "stage07-straight-enemy-spawns-v1";
+        private const int WorldLabelFontSize = 100;
+        private const float GateLabelCharacterSize = 0.048f;
+        private const float MobBlockLabelCharacterSize = 0.08f;
 
         [InitializeOnLoadMethod]
         private static void AutoRebuildOnceAfterScriptsReload()
@@ -68,6 +71,7 @@ namespace MobControlPrototype.Editor
             Material cannonMaterial = CreateMaterial(ProjectRoot + "/Materials/Prototype_CannonDark.mat", new Color(0.04f, 0.05f, 0.06f), 0.42f);
             Material gateAddMaterial = CreateMaterial(ProjectRoot + "/Materials/Prototype_GateAdd.mat", new Color(0.11f, 0.72f, 0.34f), 0.24f);
             Material gateMultiplyMaterial = CreateMaterial(ProjectRoot + "/Materials/Prototype_GateMultiply.mat", new Color(0.08f, 0.42f, 0.92f), 0.24f);
+            Material blockMaterial = CreateMaterial(ProjectRoot + "/Materials/Prototype_BlockBarrier.mat", new Color(0.86f, 0.39f, 0.14f), 0.22f);
             Material finishMaterial = CreateMaterial(ProjectRoot + "/Materials/Prototype_FinishTarget.mat", new Color(0.98f, 0.8f, 0.18f), 0.36f);
 
             GameObject runnerModel = AssetDatabase.LoadAssetAtPath<GameObject>(RunnerModelPath);
@@ -126,6 +130,7 @@ namespace MobControlPrototype.Editor
                 cannonModel,
                 gateAddMaterial,
                 gateMultiplyMaterial,
+                blockMaterial,
                 finishMaterial,
                 out finishTarget);
 
@@ -378,6 +383,7 @@ namespace MobControlPrototype.Editor
             GameObject cannonModel,
             Material gateAddMaterial,
             Material gateMultiplyMaterial,
+            Material blockMaterial,
             Material finishMaterial,
             out FinishTarget finishTarget)
         {
@@ -408,9 +414,11 @@ namespace MobControlPrototype.Editor
             }
 
             GameObject cannon = CreateStartCannon(environment.transform, cannonMaterial, cannonModel);
+            CreatePlayerLoseZone(environment.transform);
             CreateGate(environment.transform, "Gate_Add_4", 8.2f, GateOperation.Add, 4, gateAddMaterial, 2.9f, 2.7f, 0f);
             CreateGate(environment.transform, "Gate_Multiply_2", 17.6f, GateOperation.Multiply, 2, gateMultiplyMaterial, 3.4f, 3.2f, 0.45f);
             CreateGate(environment.transform, "Gate_Multiply_3", 36.4f, GateOperation.Multiply, 3, gateMultiplyMaterial, 3.7f, 2.9f, 0.9f);
+            CreateMobDamageBlock(environment.transform, "MobBarrier_30", 48.8f, 30, blockMaterial);
             finishTarget = CreateFinishTarget(environment.transform, finishMaterial);
             return cannon;
         }
@@ -500,6 +508,42 @@ namespace MobControlPrototype.Editor
             serializedGate.ApplyModifiedPropertiesWithoutUndo();
         }
 
+        private static void CreateMobDamageBlock(
+            Transform parent,
+            string name,
+            float zPosition,
+            int health,
+            Material material)
+        {
+            GameObject block = new GameObject(name);
+            block.transform.SetParent(parent, false);
+            block.transform.localPosition = new Vector3(0f, 0f, zPosition);
+
+            GameObject wall = CreateBox("Wall", new Vector3(0f, 1.08f, 0f), new Vector3(13.2f, 2.16f, 1.2f), material, block.transform);
+            GameObject cap = CreateBox("WallCap", new Vector3(0f, 2.34f, 0f), new Vector3(13.8f, 0.3f, 1.34f), material, block.transform);
+            GameObjectUtility.SetStaticEditorFlags(wall, 0);
+            GameObjectUtility.SetStaticEditorFlags(cap, 0);
+
+            TextMesh healthLabel = CreateMobBlockLabel(block.transform, health);
+
+            BoxCollider trigger = block.AddComponent<BoxCollider>();
+            trigger.isTrigger = true;
+            trigger.center = new Vector3(0f, 1.14f, 0f);
+            trigger.size = new Vector3(13.4f, 2.4f, 1.5f);
+
+            MobDamageBlock damageBlock = block.AddComponent<MobDamageBlock>();
+            SerializedObject serializedBlock = new SerializedObject(damageBlock);
+            serializedBlock.FindProperty("health").intValue = health;
+            serializedBlock.FindProperty("damagePerUnit").intValue = 1;
+
+            SerializedProperty renderers = serializedBlock.FindProperty("feedbackRenderers");
+            renderers.arraySize = 2;
+            renderers.GetArrayElementAtIndex(0).objectReferenceValue = wall.GetComponent<Renderer>();
+            renderers.GetArrayElementAtIndex(1).objectReferenceValue = cap.GetComponent<Renderer>();
+            serializedBlock.FindProperty("healthLabel").objectReferenceValue = healthLabel;
+            serializedBlock.ApplyModifiedPropertiesWithoutUndo();
+        }
+
         private static FinishTarget CreateFinishTarget(Transform parent, Material material)
         {
             GameObject finish = new GameObject("FinalTarget");
@@ -514,6 +558,7 @@ namespace MobControlPrototype.Editor
             GameObject baseObject = CreateCylinder("TowerBase", new Vector3(0f, 0.35f, 0f), new Vector3(1.9f, 0.35f, 1.9f), material, finish.transform);
             GameObject tower = CreateCylinder("Tower", new Vector3(0f, 1.35f, 0f), new Vector3(1.15f, 1.2f, 1.15f), material, finish.transform);
             GameObject cap = CreateBox("TowerCap", new Vector3(0f, 2.65f, 0f), new Vector3(2.4f, 0.35f, 2.4f), material, finish.transform);
+            Transform[] spawnPoints = CreateEnemySpawnPoints(finish.transform);
 
             FinishTarget target = finish.AddComponent<FinishTarget>();
             SerializedObject serializedTarget = new SerializedObject(target);
@@ -525,8 +570,35 @@ namespace MobControlPrototype.Editor
             renderers.GetArrayElementAtIndex(0).objectReferenceValue = baseObject.GetComponent<Renderer>();
             renderers.GetArrayElementAtIndex(1).objectReferenceValue = tower.GetComponent<Renderer>();
             renderers.GetArrayElementAtIndex(2).objectReferenceValue = cap.GetComponent<Renderer>();
+
+            SerializedProperty spawnPointArray = serializedTarget.FindProperty("enemySpawnPoints");
+            spawnPointArray.arraySize = spawnPoints.Length;
+            for (int i = 0; i < spawnPoints.Length; i++)
+            {
+                spawnPointArray.GetArrayElementAtIndex(i).objectReferenceValue = spawnPoints[i];
+            }
+
             serializedTarget.ApplyModifiedPropertiesWithoutUndo();
             return target;
+        }
+
+        private static Transform[] CreateEnemySpawnPoints(Transform parent)
+        {
+            GameObject container = new GameObject("EnemySpawnPoints");
+            container.transform.SetParent(parent, false);
+
+            float[] xPositions = { -4.8f, -2.4f, 0f, 2.4f, 4.8f };
+            Transform[] spawnPoints = new Transform[xPositions.Length];
+
+            for (int i = 0; i < xPositions.Length; i++)
+            {
+                GameObject point = new GameObject($"EnemySpawnPoint_{i + 1:00}");
+                point.transform.SetParent(container.transform, false);
+                point.transform.localPosition = new Vector3(xPositions[i], 0.02f, -1.6f);
+                spawnPoints[i] = point.transform;
+            }
+
+            return spawnPoints;
         }
 
         private static GameObject CreateStartCannon(Transform parent, Material cannonMaterial, GameObject cannonModel)
@@ -561,6 +633,20 @@ namespace MobControlPrototype.Editor
             hole.transform.localPosition = new Vector3(0f, 0.12f, 1.8f);
 
             return cannonRoot;
+        }
+
+        private static void CreatePlayerLoseZone(Transform parent)
+        {
+            GameObject loseZone = new GameObject("PlayerLoseZone");
+            loseZone.transform.SetParent(parent, false);
+            loseZone.transform.localPosition = new Vector3(0f, 0f, -2.1f);
+
+            BoxCollider trigger = loseZone.AddComponent<BoxCollider>();
+            trigger.isTrigger = true;
+            trigger.center = new Vector3(0f, 1.05f, 0f);
+            trigger.size = new Vector3(13.8f, 2.2f, 0.85f);
+
+            loseZone.AddComponent<PlayerCannonHitZone>();
         }
 
         private static UnitRunnerManager CreateRunnerManager()
@@ -819,15 +905,35 @@ namespace MobControlPrototype.Editor
             label.transform.SetParent(parent, false);
             label.transform.localPosition = new Vector3(0f, 0.04f, zOffset);
             label.transform.localRotation = Quaternion.identity;
+            label.transform.localScale = Vector3.one;
 
             TextMesh textMesh = label.AddComponent<TextMesh>();
             textMesh.text = FormatGateLabel(operation, value);
             textMesh.anchor = TextAnchor.MiddleCenter;
             textMesh.alignment = TextAlignment.Center;
-            textMesh.characterSize = 0.16f;
-            textMesh.fontSize = 30;
+            textMesh.characterSize = GateLabelCharacterSize;
+            textMesh.fontSize = WorldLabelFontSize;
             textMesh.color = Color.white;
             textMesh.fontStyle = FontStyle.Bold;
+        }
+
+        private static TextMesh CreateMobBlockLabel(Transform parent, int health)
+        {
+            GameObject label = new GameObject("HealthLabel");
+            label.transform.SetParent(parent, false);
+            label.transform.localPosition = new Vector3(0f, 1.2f, -0.76f);
+            label.transform.localRotation = Quaternion.identity;
+            label.transform.localScale = Vector3.one;
+
+            TextMesh textMesh = label.AddComponent<TextMesh>();
+            textMesh.text = health.ToString();
+            textMesh.anchor = TextAnchor.MiddleCenter;
+            textMesh.alignment = TextAlignment.Center;
+            textMesh.characterSize = MobBlockLabelCharacterSize;
+            textMesh.fontSize = WorldLabelFontSize;
+            textMesh.color = Color.white;
+            textMesh.fontStyle = FontStyle.Bold;
+            return textMesh;
         }
 
         private static string FormatGateLabel(GateOperation operation, int value)

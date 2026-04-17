@@ -12,18 +12,15 @@ namespace MobControlPrototype.Gameplay
 
         [Header("References")]
         [SerializeField] private UnitRunnerManager runnerManager;
-        [SerializeField] private CannonShooter cannonShooter;
         [SerializeField] private FinishTarget finishTarget;
         [SerializeField] private GameObject enemyPrefab;
 
         [Header("Spawning")]
         [SerializeField, Min(0.1f)] private float spawnRate = 2f;
         [SerializeField, Min(1)] private int maxActiveEnemies = 48;
-        [SerializeField] private Vector3 spawnOffset = new Vector3(0f, 0f, -1.6f);
 
         [Header("Movement")]
         [SerializeField, Min(0.1f)] private float moveSpeed = 5.1f;
-        [SerializeField, Min(90f)] private float turnSpeed = 540f;
 
         [Header("Physics")]
         [SerializeField, Min(0.1f)] private float colliderRadius = 0.28f;
@@ -42,12 +39,10 @@ namespace MobControlPrototype.Gameplay
 
         public void Configure(
             UnitRunnerManager unitRunnerManager,
-            CannonShooter shooter,
             FinishTarget target,
             GameObject prefab)
         {
             runnerManager = unitRunnerManager;
-            cannonShooter = shooter;
             finishTarget = target;
             enemyPrefab = prefab;
         }
@@ -62,11 +57,6 @@ namespace MobControlPrototype.Gameplay
             if (runnerManager == null)
             {
                 ServiceLocator.TryGet(out runnerManager);
-            }
-
-            if (cannonShooter == null)
-            {
-                cannonShooter = FindObjectOfType<CannonShooter>();
             }
 
             if (finishTarget == null)
@@ -121,6 +111,8 @@ namespace MobControlPrototype.Gameplay
 
         private void MoveEnemies(float deltaTime)
         {
+            Vector3 movementDelta = Vector3.back * (moveSpeed * deltaTime);
+
             for (int i = _activeEnemies.Count - 1; i >= 0; i--)
             {
                 EnemyMob enemy = _activeEnemies[i];
@@ -130,29 +122,15 @@ namespace MobControlPrototype.Gameplay
                 }
 
                 Vector3 currentPosition = enemy.WorldPosition;
-                Vector3 targetDirection = GetDirectionToCannon(currentPosition);
-                Quaternion currentRotation = enemy.transform.rotation;
-                Quaternion targetRotation = Quaternion.LookRotation(targetDirection, Vector3.up);
-                Quaternion nextRotation = Quaternion.RotateTowards(currentRotation, targetRotation, turnSpeed * deltaTime);
-                Vector3 moveDirection = nextRotation * Vector3.forward;
-                moveDirection.y = 0f;
-                if (moveDirection.sqrMagnitude <= 0.000001f)
-                {
-                    continue;
-                }
-
-                moveDirection.Normalize();
-                Vector3 nextPosition = currentPosition + moveDirection * (moveSpeed * deltaTime);
+                Vector3 nextPosition = currentPosition + movementDelta;
                 Rigidbody body = enemy.Body;
                 if (body != null)
                 {
                     body.MovePosition(nextPosition);
-                    body.MoveRotation(nextRotation);
                 }
                 else
                 {
                     enemy.transform.position = nextPosition;
-                    enemy.transform.rotation = nextRotation;
                 }
             }
         }
@@ -161,10 +139,9 @@ namespace MobControlPrototype.Gameplay
         {
             GameObject instance = GetFromPool();
             Vector3 spawnPosition = GetSpawnPosition();
-            Vector3 direction = GetDirectionToCannon(spawnPosition);
 
             instance.transform.SetParent(transform, true);
-            instance.transform.SetPositionAndRotation(spawnPosition, Quaternion.LookRotation(direction, Vector3.up));
+            instance.transform.SetPositionAndRotation(spawnPosition, Quaternion.LookRotation(Vector3.back, Vector3.up));
             instance.name = $"EnemyRunner_{++_spawnedCount:000}";
             ApplyEnemyTint(instance);
             instance.SetActive(true);
@@ -257,46 +234,12 @@ namespace MobControlPrototype.Gameplay
 
         private Vector3 GetSpawnPosition()
         {
-            Vector3 position = finishTarget != null ? finishTarget.transform.position : transform.position;
-            position += spawnOffset;
-
-            if (cannonShooter != null)
+            if (finishTarget != null)
             {
-                position.y = cannonShooter.SpawnWorldPosition.y;
+                return finishTarget.GetEnemySpawnPosition();
             }
 
-            return position;
-        }
-
-        private Vector3 GetDirectionToCannon(Vector3 fromPosition)
-        {
-            Vector3 targetPosition = GetCannonTargetPosition(fromPosition.y);
-            targetPosition.y = fromPosition.y;
-
-            Vector3 direction = targetPosition - fromPosition;
-            direction.y = 0f;
-            if (direction.sqrMagnitude <= 0.0001f)
-            {
-                return Vector3.back;
-            }
-
-            return direction.normalized;
-        }
-
-        private Vector3 GetCannonTargetPosition(float yPosition)
-        {
-            Vector3 targetPosition;
-            if (cannonShooter != null)
-            {
-                targetPosition = cannonShooter.SpawnWorldPosition;
-            }
-            else
-            {
-                targetPosition = transform.position + Vector3.back;
-            }
-
-            targetPosition.y = yPosition;
-            return targetPosition;
+            return transform.position;
         }
 
         private void ApplyEnemyTint(GameObject enemyObject)

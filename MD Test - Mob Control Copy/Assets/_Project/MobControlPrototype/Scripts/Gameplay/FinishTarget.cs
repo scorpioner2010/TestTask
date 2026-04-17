@@ -10,6 +10,7 @@ namespace MobControlPrototype.Gameplay
         [SerializeField, Min(1)] private int health = 20;
         [SerializeField, Min(1)] private int damagePerUnit = 1;
         [SerializeField] private Renderer[] feedbackRenderers;
+        [SerializeField] private Transform[] enemySpawnPoints;
         [SerializeField] private Color successColor = new Color(0.16f, 0.76f, 0.31f, 1f);
 
         private int _currentHealth;
@@ -59,6 +60,34 @@ namespace MobControlPrototype.Gameplay
             return true;
         }
 
+        public Vector3 GetEnemySpawnPosition()
+        {
+            int validSpawnPointCount = GetValidSpawnPointCount();
+            if (validSpawnPointCount <= 0)
+            {
+                return transform.position;
+            }
+
+            int targetIndex = UnityEngine.Random.Range(0, validSpawnPointCount);
+            for (int i = 0; i < enemySpawnPoints.Length; i++)
+            {
+                Transform spawnPoint = enemySpawnPoints[i];
+                if (spawnPoint == null)
+                {
+                    continue;
+                }
+
+                if (targetIndex == 0)
+                {
+                    return spawnPoint.position;
+                }
+
+                targetIndex--;
+            }
+
+            return transform.position;
+        }
+
         private void ApplyResultFeedback(bool success)
         {
             Color color = successColor;
@@ -79,6 +108,25 @@ namespace MobControlPrototype.Gameplay
         private void NotifyHealthChanged()
         {
             HealthChanged?.Invoke(_currentHealth, health);
+        }
+
+        private int GetValidSpawnPointCount()
+        {
+            if (enemySpawnPoints == null || enemySpawnPoints.Length == 0)
+            {
+                return 0;
+            }
+
+            int validCount = 0;
+            for (int i = 0; i < enemySpawnPoints.Length; i++)
+            {
+                if (enemySpawnPoints[i] != null)
+                {
+                    validCount++;
+                }
+            }
+
+            return validCount;
         }
     }
 }
