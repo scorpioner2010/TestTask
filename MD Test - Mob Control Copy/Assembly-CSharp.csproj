@@ -60,6 +60,7 @@
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Infrastructure\ServiceLocator.cs" />
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Gameplay\PlayerCannonHitZone.cs" />
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Gameplay\MobDamageBlock.cs" />
+    <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Graphics\PrototypeGraphicsRig.cs" />
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Gameplay\SinkFeedbackAnimator.cs" />
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Crowd\UnitFactory.cs" />
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Crowd\ForwardMovementStrategy.cs" />

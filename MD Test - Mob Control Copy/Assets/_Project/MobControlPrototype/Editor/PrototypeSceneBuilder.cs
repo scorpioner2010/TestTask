@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using MobControlPrototype.Bootstrap;
 using MobControlPrototype.Crowd;
 using MobControlPrototype.Gameplay;
+using MobControlPrototype.Graphics;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -17,6 +18,8 @@ namespace MobControlPrototype.Editor
         private const string UnitPrefabPath = ProjectRoot + "/Prefabs/RunnerUnit.prefab";
         private const string RunnerModelPath = "Assets/Models/LowPoly_Stickaman_Running.fbx";
         private const string CannonModelPath = "Assets/Models/Cannon.fbx";
+        private const string DemoSkyboxMaterialPath = "Assets/Plugins/JMO Assets/Toony Colors Pro/Demo TCP2/TCP2 Demo Assets/Cubemaps/TCP2_Demo_Sky_NissiBeach.mat";
+        private const string DemoSkyboxReflectionPath = "Assets/Plugins/JMO Assets/Toony Colors Pro/Demo TCP2/TCP2 Demo Assets/Cubemaps/TCP2_Demo_Cubemap_NissiBeach.jpg";
         private const string AutoBuildVersion = "stage07-straight-enemy-spawns-v1";
         private const int WorldLabelFontSize = 100;
         private const float GateLabelCharacterSize = 0.048f;
@@ -27,12 +30,12 @@ namespace MobControlPrototype.Editor
         {
             EditorApplication.delayCall += () =>
             {
-                string key = $"MobControlPrototype.{AutoBuildVersion}.{Application.dataPath}";
-                if (EditorPrefs.GetString(key) == AutoBuildVersion && GeneratedAssetsAreReady())
+                if (GeneratedAssetsAreReady())
                 {
                     return;
                 }
 
+                string key = $"MobControlPrototype.{AutoBuildVersion}.{Application.dataPath}";
                 TryAutoBuild(key);
             };
         }
@@ -136,9 +139,10 @@ namespace MobControlPrototype.Editor
 
             UnitRunnerManager runnerManager = CreateRunnerManager();
             CannonShooter cannonShooter = ConfigureCannonShooter(cannon, runnerManager);
-            EnsureMainCameraExists();
+            Camera camera = EnsureMainCameraExists();
             CreateHud(runnerManager, finishTarget);
-            CreateLighting();
+            Light sunLight = CreateLighting();
+            CreateGraphicsRig(camera, sunLight);
             CreateBootstrapper(runnerManager, cannonShooter, runnerPrefab, runnerModel, runningClip, unitMaterial);
 
             bool sceneSaved = EditorSceneManager.SaveScene(scene, ScenePath);
@@ -214,7 +218,7 @@ namespace MobControlPrototype.Editor
         private static Material CreateMaterial(string path, Color color, float smoothness)
         {
             Material material = AssetDatabase.LoadAssetAtPath<Material>(path);
-            Shader shader = Shader.Find("Standard") != null ? Shader.Find("Standard") : Shader.Find("Diffuse");
+            Shader shader = FindPrototypeShader();
 
             if (material == null)
             {
@@ -223,17 +227,7 @@ namespace MobControlPrototype.Editor
             }
 
             material.shader = shader;
-            material.color = color;
-
-            if (material.HasProperty("_Glossiness"))
-            {
-                material.SetFloat("_Glossiness", smoothness);
-            }
-
-            if (material.HasProperty("_Metallic"))
-            {
-                material.SetFloat("_Metallic", 0f);
-            }
+            ApplyPrototypeMaterialStyle(material, color, smoothness);
 
             EditorUtility.SetDirty(material);
             return material;
@@ -823,12 +817,12 @@ namespace MobControlPrototype.Editor
             return uiText;
         }
 
-        private static void EnsureMainCameraExists()
+        private static Camera EnsureMainCameraExists()
         {
             UnityEngine.Camera camera = Object.FindObjectOfType<UnityEngine.Camera>();
             if (camera != null)
             {
-                return;
+                return camera;
             }
 
             GameObject cameraObject = new GameObject("Main Camera");
@@ -841,18 +835,20 @@ namespace MobControlPrototype.Editor
             camera.nearClipPlane = 0.1f;
             camera.farClipPlane = 120f;
             cameraObject.AddComponent<AudioListener>();
+            return camera;
         }
 
-        private static void CreateLighting()
+        private static Light CreateLighting()
         {
             GameObject lightObject = new GameObject("Sun Light");
-            lightObject.transform.rotation = Quaternion.Euler(48f, -32f, 0f);
+            lightObject.transform.rotation = Quaternion.Euler(37f, 260f, 0f);
 
             Light light = lightObject.AddComponent<Light>();
             light.type = LightType.Directional;
-            light.intensity = 1.18f;
-            light.color = new Color(1f, 0.94f, 0.84f);
+            light.intensity = 1f;
+            light.color = new Color(0.76470596f, 0.76470596f, 0.76470596f);
             light.shadows = LightShadows.Soft;
+            return light;
         }
 
         private static void CreateBootstrapper(
@@ -880,9 +876,185 @@ namespace MobControlPrototype.Editor
 
         private static void ConfigureRenderSettings()
         {
-            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
-            RenderSettings.ambientLight = new Color(0.58f, 0.62f, 0.68f);
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Skybox;
+            RenderSettings.ambientSkyColor = new Color(0.19607843f, 0.19607843f, 0.19607843f);
+            RenderSettings.ambientEquatorColor = new Color(0.19607843f, 0.19607843f, 0.19607843f);
+            RenderSettings.ambientGroundColor = new Color(0.19607843f, 0.19607843f, 0.19607843f);
+            RenderSettings.ambientIntensity = 1f;
             RenderSettings.fog = false;
+            RenderSettings.defaultReflectionMode = UnityEngine.Rendering.DefaultReflectionMode.Custom;
+            RenderSettings.defaultReflectionResolution = 256;
+            RenderSettings.reflectionBounces = 1;
+            RenderSettings.reflectionIntensity = 1f;
+
+            Material skyboxMaterial = AssetDatabase.LoadAssetAtPath<Material>(DemoSkyboxMaterialPath);
+            Cubemap reflection = AssetDatabase.LoadAssetAtPath<Cubemap>(DemoSkyboxReflectionPath);
+
+            if (skyboxMaterial != null)
+            {
+                RenderSettings.skybox = skyboxMaterial;
+            }
+
+            if (reflection != null)
+            {
+                RenderSettings.customReflection = reflection;
+            }
+        }
+
+        private static Shader FindPrototypeShader()
+        {
+            Shader tcp2Shader = Shader.Find("Toony Colors Pro 2/Standard PBS");
+            if (tcp2Shader != null)
+            {
+                return tcp2Shader;
+            }
+
+            return Shader.Find("Standard") ?? Shader.Find("Diffuse");
+        }
+
+        private static void ApplyPrototypeMaterialStyle(Material material, Color color, float smoothness)
+        {
+            material.color = color;
+
+            if (material.shader != null && material.shader.name == "Toony Colors Pro 2/Standard PBS")
+            {
+                Color shadowTint = Color.Lerp(color * 0.32f, new Color(0.23484801f, 0.43726364f, 0.716f, 1f), 0.45f);
+                shadowTint.a = 1f;
+
+                SetTextureIfPresent(material, "_MainTex", null);
+                SetTextureIfPresent(material, "_Bump", null);
+                SetTextureIfPresent(material, "_BumpMap", null);
+                SetTextureIfPresent(material, "_Cube", null);
+                SetTextureIfPresent(material, "_DetailAlbedoMap", null);
+                SetTextureIfPresent(material, "_DetailMask", null);
+                SetTextureIfPresent(material, "_DetailNormalMap", null);
+                SetTextureIfPresent(material, "_EmissionMap", null);
+                SetTextureIfPresent(material, "_MetallicGlossMap", null);
+                SetTextureIfPresent(material, "_OcclusionMap", null);
+                SetTextureIfPresent(material, "_ParallaxMap", null);
+                SetTextureIfPresent(material, "_Ramp", null);
+
+                SetFloatIfPresent(material, "_BumpScale", 0f);
+                SetFloatIfPresent(material, "_Glossiness", smoothness);
+                SetFloatIfPresent(material, "_Metallic", 0f);
+                SetFloatIfPresent(material, "_Parallax", 0.02f);
+                SetFloatIfPresent(material, "_RampThreshold", 0.5f);
+                SetFloatIfPresent(material, "_RampSmooth", 0.15f);
+                SetFloatIfPresent(material, "_RampSmoothAdd", 0.5f);
+                SetFloatIfPresent(material, "_RimMax", 0.9f);
+                SetFloatIfPresent(material, "_RimMin", 0.6f);
+                SetFloatIfPresent(material, "_RimPower", -1.2835822f);
+                SetFloatIfPresent(material, "_RimStrength", 0.3f);
+                SetFloatIfPresent(material, "_Shininess", 0.35f);
+                SetFloatIfPresent(material, "_SpecBlend", 1f);
+                SetFloatIfPresent(material, "_SpecSmooth", 1f);
+                SetFloatIfPresent(material, "_TCP2_DISABLE_WRAPPED_LIGHT", 1f);
+                SetFloatIfPresent(material, "_TCP2_RAMPTEXT", 0f);
+                SetFloatIfPresent(material, "_TCP2_SPEC_TOON", 1f);
+                SetFloatIfPresent(material, "_TCP2_STYLIZED_FRESNEL", 1f);
+
+                SetColorIfPresent(material, "_Color", color);
+                SetColorIfPresent(material, "_EmissionColor", Color.black);
+                SetColorIfPresent(material, "_HColor", Color.white);
+                SetColorIfPresent(material, "_ReflectColor", Color.white);
+                SetColorIfPresent(material, "_RimColor", new Color(0.2f, 0.6f, 1f, 0.5f));
+                SetColorIfPresent(material, "_SColor", shadowTint);
+                SetColorIfPresent(material, "_SpecColor", new Color(0.60294116f, 0.60294116f, 0.60294116f, 1f));
+                SetVectorIfPresent(material, "_RimDir", new Vector4(0f, 0f, 1f, 0f));
+
+                material.DisableKeyword("OUTLINES");
+                material.DisableKeyword("TCP2_COLORS_AS_NORMALS");
+                material.DisableKeyword("TCP2_TANGENT_AS_NORMALS");
+                material.DisableKeyword("TCP2_RAMPTEXT");
+                material.EnableKeyword("TCP2_DISABLE_WRAPPED_LIGHT");
+                material.EnableKeyword("TCP2_SPEC_TOON");
+                material.EnableKeyword("TCP2_STYLIZED_FRESNEL");
+            }
+            else
+            {
+                if (material.HasProperty("_Glossiness"))
+                {
+                    material.SetFloat("_Glossiness", smoothness);
+                }
+
+                if (material.HasProperty("_Metallic"))
+                {
+                    material.SetFloat("_Metallic", 0f);
+                }
+            }
+        }
+
+        private static void SetFloatIfPresent(Material material, string propertyName, float value)
+        {
+            if (material.HasProperty(propertyName))
+            {
+                material.SetFloat(propertyName, value);
+            }
+        }
+
+        private static void SetColorIfPresent(Material material, string propertyName, Color value)
+        {
+            if (material.HasProperty(propertyName))
+            {
+                material.SetColor(propertyName, value);
+            }
+        }
+
+        private static void SetVectorIfPresent(Material material, string propertyName, Vector4 value)
+        {
+            if (material.HasProperty(propertyName))
+            {
+                material.SetVector(propertyName, value);
+            }
+        }
+
+        private static void SetTextureIfPresent(Material material, string propertyName, Texture value)
+        {
+            if (material.HasProperty(propertyName))
+            {
+                material.SetTexture(propertyName, value);
+            }
+        }
+
+        private static void CreateGraphicsRig(Camera camera, Light sunLight)
+        {
+            GameObject graphicsRoot = new GameObject("PrototypeGraphicsRig");
+            PrototypeGraphicsRig graphicsRig = graphicsRoot.AddComponent<PrototypeGraphicsRig>();
+            GameObject pointLightsRoot = CreatePointLightsRoot(graphicsRoot.transform);
+            Material skyboxMaterial = AssetDatabase.LoadAssetAtPath<Material>(DemoSkyboxMaterialPath);
+            Cubemap reflection = AssetDatabase.LoadAssetAtPath<Cubemap>(DemoSkyboxReflectionPath);
+
+            graphicsRig.ConfigureScene(camera, sunLight, pointLightsRoot, skyboxMaterial, reflection);
+        }
+
+        private static GameObject CreatePointLightsRoot(Transform parent)
+        {
+            GameObject root = new GameObject("Point Lights");
+            root.transform.SetParent(parent, false);
+            root.transform.localPosition = new Vector3(0f, 1.3f, 0f);
+            root.transform.localRotation = Quaternion.identity;
+
+            CreatePointLight(root.transform, "_Light Point Orange", new Vector3(0.23f, 0f, 0.2f), new Color(1f, 0.55862063f, 0f), 2f, 1.5f);
+            CreatePointLight(root.transform, "_Light Point Green", new Vector3(-0.3f, 0.4f, 0f), new Color(0.0344826f, 1f, 0f), 2f, 0.5f);
+            CreatePointLight(root.transform, "_Light Point Blue", new Vector3(0f, -1.1f, -0.5f), new Color(1f, 0f, 0f), 3f, 1f);
+
+            root.SetActive(false);
+            return root;
+        }
+
+        private static void CreatePointLight(Transform parent, string name, Vector3 localPosition, Color color, float intensity, float range)
+        {
+            GameObject lightObject = new GameObject(name);
+            lightObject.transform.SetParent(parent, false);
+            lightObject.transform.localPosition = localPosition;
+            lightObject.transform.localRotation = Quaternion.identity;
+
+            Light light = lightObject.AddComponent<Light>();
+            light.type = LightType.Point;
+            light.color = color;
+            light.intensity = intensity;
+            light.range = range;
+            light.shadows = LightShadows.None;
         }
 
         private static void AssignMaterial(GameObject root, Material material)
