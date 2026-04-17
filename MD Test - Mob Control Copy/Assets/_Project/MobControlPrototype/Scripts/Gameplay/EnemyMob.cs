@@ -1,3 +1,4 @@
+using MobControlPrototype.Infrastructure;
 using UnityEngine;
 
 namespace MobControlPrototype.Gameplay
@@ -10,6 +11,7 @@ namespace MobControlPrototype.Gameplay
         private CapsuleCollider _trigger;
         private Rigidbody _body;
         private SinkFeedbackAnimator _sinkFeedback;
+        private PrototypeGameplayVfxService _vfxService;
 
         public int ActiveIndex { get; set; }
         public bool IsActive => _isAlive;
@@ -80,6 +82,12 @@ namespace MobControlPrototype.Gameplay
                 return false;
             }
 
+            if (_vfxService == null)
+            {
+                ServiceLocator.TryGet(out _vfxService);
+            }
+
+            _vfxService?.PlayUnitCollision(runner.WorldPosition, WorldPosition, runner.MovementDirection);
             runner.Manager.RemoveRunnerWithSink(runner);
             _manager.RemoveEnemyWithSink(this);
             return true;

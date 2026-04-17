@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using MobControlPrototype.Infrastructure;
 using UnityEngine;
 
 namespace MobControlPrototype.Gameplay
@@ -33,6 +34,7 @@ namespace MobControlPrototype.Gameplay
         private Vector3 _baseLocalPosition;
         private Color _baseLabelColor = Color.white;
         private MaterialPropertyBlock _propertyBlock;
+        private PrototypeGameplayVfxService _vfxService;
 
         public event Action<int, int> HealthChanged;
 
@@ -117,9 +119,11 @@ namespace MobControlPrototype.Gameplay
                 return false;
             }
 
+            Vector3 attackerPosition = runner.WorldPosition;
             _currentHealth = Mathf.Max(0, _currentHealth - damagePerUnit);
             runner.Manager.RemoveRunnerWithSink(runner);
             NotifyHealthChanged();
+            PlayDamageVfx(attackerPosition);
 
             if (_currentHealth > 0)
             {
@@ -200,6 +204,16 @@ namespace MobControlPrototype.Gameplay
             }
 
             _feedbackRoutine = null;
+        }
+
+        private void PlayDamageVfx(Vector3 attackerPosition)
+        {
+            if (_vfxService == null)
+            {
+                ServiceLocator.TryGet(out _vfxService);
+            }
+
+            _vfxService?.PlayWallDamage(transform, _trigger, attackerPosition);
         }
 
         private static float GetBoostedScaleMultiplier(float scaleMultiplier)

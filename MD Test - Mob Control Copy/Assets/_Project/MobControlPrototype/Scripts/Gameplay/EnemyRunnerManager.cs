@@ -16,7 +16,7 @@ namespace MobControlPrototype.Gameplay
         [SerializeField] private GameObject enemyPrefab;
 
         [Header("Spawning")]
-        [SerializeField, Min(0.1f)] private float spawnRate = 2f;
+        [SerializeField, Min(0.1f)] private float spawnRate = 0f;
         [SerializeField, Min(1)] private int maxActiveEnemies = 48;
 
         [Header("Movement")]

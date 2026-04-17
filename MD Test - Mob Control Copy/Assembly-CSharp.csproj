@@ -46,9 +46,11 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Crowd\IUnitFactory.cs" />
+    <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Vfx\PrototypeGameplayVfxSettings.cs" />
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Gameplay\GateModifier.cs" />
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Gameplay\UnitRunner.cs" />
     <Compile Include="Assets\TestScript.cs" />
+    <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Vfx\PrototypeGameplayVfxService.cs" />
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Crowd\UnitAnimationPlayer.cs" />
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Gameplay\FinishTarget.cs" />
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Crowd\IMovementStrategy.cs" />
@@ -65,6 +67,7 @@
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Gameplay\UnitRunnerManager.cs" />
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Gameplay\GateOperation.cs" />
     <Compile Include="Assets\_Project\MobControlPrototype\Scripts\Gameplay\CannonShooter.cs" />
+    <None Include="Assets\Particle VFX\Materials\VFX_Mobile-Particle-Add-Revised.shader" />
     <Reference Include="UnityEngine">
       <HintPath>C:\Program Files\Unity\Hub\Editor\2022.3.16f1\Editor\Data\Managed\UnityEngine\UnityEngine.dll</HintPath>
     </Reference>

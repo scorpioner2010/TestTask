@@ -18,6 +18,9 @@ namespace MobControlPrototype.Bootstrap
         [SerializeField, Min(0f)] private float forwardSpeed = 5.4f;
         [SerializeField, Min(0f)] private float runningAnimationSpeed = 1.12f;
 
+        [Header("VFX")]
+        [SerializeField] private PrototypeGameplayVfxSettings gameplayVfxSettings = new PrototypeGameplayVfxSettings();
+
         private void Awake()
         {
             ServiceLocator.Clear();
@@ -45,7 +48,25 @@ namespace MobControlPrototype.Bootstrap
                 ServiceLocator.Register(cannonShooter);
             }
 
+            if (gameplayVfxSettings == null)
+            {
+                gameplayVfxSettings = new PrototypeGameplayVfxSettings();
+            }
+
+            PrototypeGameplayVfxService gameplayVfxService =
+                PrototypeGameplayVfxService.Create(gameplayVfxSettings, transform);
+            if (gameplayVfxService != null)
+            {
+                ServiceLocator.Register(gameplayVfxService);
+            }
+
             SetupEnemyLoop();
+        }
+
+        private void OnValidate()
+        {
+            gameplayVfxSettings ??= new PrototypeGameplayVfxSettings();
+            gameplayVfxSettings.OnValidate();
         }
 
         private void OnDestroy()

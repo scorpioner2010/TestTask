@@ -1,0 +1,62 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3a1cb96e5d9c4a889176ba2e7cb89dbe, type: 3}
+  m_Name: PrototypeGameplayVfxProfile
+  m_EditorClassIdentifier: 
+  shot:
+    prefab: {fileID: 100100000, guid: 2efe3c1ab162768428520e50da5c559d, type: 3}
+    scale: 0.42
+    verticalOffset: 0.05
+    cameraDepthOffset: 0
+    faceCamera: 0
+    keepUpright: 1
+    localEulerAngles: {x: 0, y: 0, z: 0}
+  unitCollision:
+    prefab: {fileID: 100100000, guid: b0ce530911e46774bbca841e6306755c, type: 3}
+    scale: 0.62
+    verticalOffset: 0.48
+    cameraDepthOffset: 0.08
+    faceCamera: 1
+    keepUpright: 0
+    localEulerAngles: {x: 0, y: 0, z: 0}
+  gateAdd:
+    prefab: {fileID: 100100000, guid: eda8a1d3983b75e40a699361e12dba5f, type: 3}
+    scale: 0.9
+    verticalOffset: 0.85
+    cameraDepthOffset: 0.08
+    faceCamera: 1
+    keepUpright: 1
+    localEulerAngles: {x: 0, y: 0, z: 0}
+  gateMultiply:
+    prefab: {fileID: 100100000, guid: 8f37cc1e296ab264e82f259723548a6f, type: 3}
+    scale: 1
+    verticalOffset: 0.85
+    cameraDepthOffset: 0.08
+    faceCamera: 1
+    keepUpright: 1
+    localEulerAngles: {x: 0, y: 0, z: 0}
+  wallDamage:
+    prefab: {fileID: 100100000, guid: bf76576479b56ed419d4e2631595d5cd, type: 3}
+    scale: 0.72
+    verticalOffset: 0.58
+    cameraDepthOffset: 0.1
+    faceCamera: 1
+    keepUpright: 1
+    localEulerAngles: {x: 0, y: 0, z: 0}
+  castleDamage:
+    prefab: {fileID: 100100000, guid: bf76576479b56ed419d4e2631595d5cd, type: 3}
+    scale: 0.96
+    verticalOffset: 1
+    cameraDepthOffset: 0.12
+    faceCamera: 1
+    keepUpright: 1
+    localEulerAngles: {x: 0, y: 0, z: 0}

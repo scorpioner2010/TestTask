@@ -30,6 +30,7 @@ namespace MobControlPrototype.Gameplay
         [SerializeField] private Vector3 stretchedScaleMultiplier = new Vector3(0.96f, 1.04f, 1.12f);
 
         private UnityEngine.Camera _camera;
+        private PrototypeGameplayVfxService _vfxService;
         private float _shotTimer;
         private float _recoilTimer;
         private bool _isRecoiling;
@@ -85,6 +86,11 @@ namespace MobControlPrototype.Gameplay
             if (runnerManager == null)
             {
                 ServiceLocator.TryGet(out runnerManager);
+            }
+
+            if (_vfxService == null)
+            {
+                ServiceLocator.TryGet(out _vfxService);
             }
 
             if (spawnPoint == null)
@@ -202,6 +208,11 @@ namespace MobControlPrototype.Gameplay
             Quaternion spawnRotation = Quaternion.LookRotation(Vector3.forward, Vector3.up);
             if (runnerManager.FireUnit(spawnPosition, spawnRotation) != null)
             {
+                Vector3 effectPosition = spawnPoint != null ? spawnPoint.position : spawnPosition;
+                Vector3 effectForward = spawnPoint != null
+                    ? spawnPoint.forward
+                    : (muzzle != null ? muzzle.forward : Vector3.forward);
+                _vfxService?.PlayShot(effectPosition, effectForward);
                 TriggerShotFeedback();
             }
         }

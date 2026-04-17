@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using MobControlPrototype.Infrastructure;
 using UnityEngine;
 
 namespace MobControlPrototype.Gameplay
@@ -32,6 +33,7 @@ namespace MobControlPrototype.Gameplay
         private Transform[] _pulseTargets = Array.Empty<Transform>();
         private Vector3[] _basePulseTargetScales = Array.Empty<Vector3>();
         private MaterialPropertyBlock _propertyBlock;
+        private PrototypeGameplayVfxService _vfxService;
 
         public event Action<int, int> HealthChanged;
 
@@ -100,9 +102,11 @@ namespace MobControlPrototype.Gameplay
                 return false;
             }
 
+            Vector3 attackerPosition = runner.WorldPosition;
             _currentHealth = Mathf.Max(0, _currentHealth - damagePerUnit);
             runner.Manager.RemoveRunner(runner);
             NotifyHealthChanged();
+            PlayDamageVfx(attackerPosition);
 
             if (_currentHealth > 0)
             {
@@ -248,6 +252,16 @@ namespace MobControlPrototype.Gameplay
 
             StopCoroutine(_feedbackRoutine);
             _feedbackRoutine = null;
+        }
+
+        private void PlayDamageVfx(Vector3 attackerPosition)
+        {
+            if (_vfxService == null)
+            {
+                ServiceLocator.TryGet(out _vfxService);
+            }
+
+            _vfxService?.PlayCastleDamage(transform, _trigger, attackerPosition);
         }
 
         private void ApplyPulseScaleMultiplier(float scaleMultiplier)

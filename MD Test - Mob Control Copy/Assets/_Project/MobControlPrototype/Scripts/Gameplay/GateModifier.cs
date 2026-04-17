@@ -1,3 +1,4 @@
+using MobControlPrototype.Infrastructure;
 using UnityEngine;
 
 namespace MobControlPrototype.Gameplay
@@ -18,6 +19,7 @@ namespace MobControlPrototype.Gameplay
         private Vector3 _baseLocalPosition;
         private Vector3 _baseScale;
         private Coroutine _pulseRoutine;
+        private PrototypeGameplayVfxService _vfxService;
 
         public GateOperation Operation => operation;
         public int Value => value;
@@ -87,10 +89,17 @@ namespace MobControlPrototype.Gameplay
                 spawnZ = trigger.bounds.max.z + 0.8f;
             }
 
-            bool applied = runner.Manager.ApplyGate(runner, operation, value, spawnZ) != 0;
+            int gateDelta = runner.Manager.ApplyGate(runner, operation, value, spawnZ);
+            bool applied = gateDelta != 0;
             if (applied)
             {
                 PlayPulse();
+                if (_vfxService == null)
+                {
+                    ServiceLocator.TryGet(out _vfxService);
+                }
+
+                _vfxService?.PlayGateActivation(operation, transform, trigger);
             }
 
             return applied;
